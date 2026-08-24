@@ -14,31 +14,16 @@
  * limitations under the License.
  */
 
-/**
- * @file measure_svc_internal.h
- * @brief Component-private helpers shared by measurement service modules.
- */
-
 #pragma once
 
-#include "esp_err.h"
-#include "measure_provider.h"
+#include "freertos/FreeRTOS.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/**
+ * @file measure_svc_calibration_capture_config.h
+ * @brief Private compile-time policy for fresh calibration capture windows.
+ */
 
-esp_err_t measure_svc_calibration_init(void);
-uint32_t measure_svc_calibration_apply_target_u4(
-    measure_kind_t kind,
-    measure_channel_t channel,
-    uint32_t raw_u4);
-esp_err_t measure_svc_storage_register_listeners(void);
-esp_err_t measure_svc_get_physical_input(
-    measure_channel_t channel,
-    measure_kind_t kind,
-    measure_input_t *input);
-
-#ifdef __cplusplus
-}
-#endif
+#define MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES 2U /**< Fresh samples ignored per attempt. */
+#define MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES 16U /**< Native codes averaged per attempt. */
+#define MEASURE_SVC_CAL_STABILITY_P2P_MAX_CODES 16 /**< Largest accepted code spread. */
+#define MEASURE_SVC_CAL_CAPTURE_TIMEOUT_TICKS pdMS_TO_TICKS(5000U) /**< Shared retry deadline. */

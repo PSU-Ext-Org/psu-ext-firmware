@@ -14,12 +14,20 @@
  * limitations under the License.
  */
 
-#include "measure_svc.h"
-#include "measure_svc_calibration.h"
-#include "measure_svc_samples.h"
-#include "unity.h"
+#pragma once
 
-TEST_CASE("calibration infrastructure smoke", "[calibration][smoke]")
-{
-    TEST_ASSERT_EQUAL_UINT32(8U, MEASURE_SVC_CAL_MAX_POINTS);
-}
+#include "esp_err.h"
+#include "measure_svc_samples.h"
+
+/**
+ * @file measure_svc_event_bus.h
+ * @brief Private synchronous sample-event publication contract.
+ */
+
+/** @brief Initialize the listener registry and its lock. */
+esp_err_t measure_svc_event_bus_init(void);
+/**
+ * @brief Publish an event synchronously to a snapshot of registered listeners.
+ * @param event Event that remains valid for the duration of each callback.
+ */
+void measure_svc_event_bus_publish(const measure_svc_sample_event_t *event);

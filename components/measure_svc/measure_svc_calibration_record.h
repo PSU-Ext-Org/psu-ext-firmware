@@ -30,12 +30,24 @@
 extern "C" {
 #endif
 
-#define MEASURE_SVC_CAL_RECORD_SIZE 76U
+#define MEASURE_SVC_CAL_RECORD_SIZE 76U /**< Fixed encoded record length in bytes. */
 
+/**
+ * @brief Encode a valid table into the versioned, checksummed wire format.
+ * @param table Valid calibration table; runtime cache fields are not encoded.
+ * @param record Destination buffer of exactly the fixed record size.
+ * @return `true` on success, otherwise `false`.
+ */
 bool measure_svc_cal_record_encode(
     const measure_svc_cal_table_t *table,
     uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE]);
 
+/**
+ * @brief Decode and validate a versioned, checksummed calibration record.
+ * @param record Source buffer of exactly the fixed record size.
+ * @param table Destination table with an invalidated runtime cache.
+ * @return `true` if integrity, version, and table validation all succeed.
+ */
 bool measure_svc_cal_record_decode(
     const uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE],
     measure_svc_cal_table_t *table);

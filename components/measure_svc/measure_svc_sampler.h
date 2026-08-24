@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 
-#include "measure_svc.h"
-#include "measure_svc_calibration.h"
-#include "measure_svc_samples.h"
-#include "unity.h"
+#pragma once
 
-TEST_CASE("calibration infrastructure smoke", "[calibration][smoke]")
-{
-    TEST_ASSERT_EQUAL_UINT32(8U, MEASURE_SVC_CAL_MAX_POINTS);
-}
+#include <stdint.h>
+
+#include "esp_err.h"
+
+/**
+ * @file measure_svc_sampler.h
+ * @brief Private control contract for the background input sampler.
+ */
+
+/** @brief Configure the rate used when the sampler task starts. */
+esp_err_t measure_svc_sampler_set_rate_hz(uint32_t hz);
+/** @brief Create the sampler task if it is not already running. */
+esp_err_t measure_svc_sampler_start(void);

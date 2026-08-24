@@ -28,7 +28,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
-#include "measure_svc.h"
+#include "measure_types.h"
 #include "timebase_svc.h"
 
 #ifdef __cplusplus

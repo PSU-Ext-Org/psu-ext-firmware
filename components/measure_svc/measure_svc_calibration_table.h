@@ -24,24 +24,26 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "measure_svc.h"
+#include "measure_svc_calibration.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/** @brief One persistent interpolation knot in raw and physical u4 domains. */
 typedef struct {
-    uint32_t raw_u4;
-    uint32_t actual_u4;
+    uint32_t raw_u4; /**< Uncalibrated provider value multiplied by 10,000. */
+    uint32_t actual_u4; /**< Reference physical value multiplied by 10,000. */
 } measure_svc_cal_table_point_t;
 
+/** @brief Persistent calibration knots plus a non-persistent lookup hint. */
 typedef struct {
-    uint8_t count;
-    measure_svc_cal_table_point_t points[MEASURE_SVC_CAL_MAX_POINTS];
+    uint8_t count; /**< Number of populated points. */
+    measure_svc_cal_table_point_t points[MEASURE_SVC_CAL_MAX_POINTS]; /**< Ordered knots. */
 
     /* Runtime lookup hint. These fields must never be persisted. */
-    uint8_t cached_segment;
-    bool cache_valid;
+    uint8_t cached_segment; /**< Most recently selected segment index. */
+    bool cache_valid; /**< Whether @ref cached_segment can be considered. */
 } measure_svc_cal_table_t;
 
 /**
@@ -49,11 +51,15 @@ typedef struct {
  *
  * A valid table contains 2..8 points that are strictly increasing in both
  * raw and actual values.
+ *
+ * @param table Table whose persistent fields are checked.
+ * @return `true` when the table can be used for interpolation.
  */
 bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table);
 
 /**
  * @brief Reset the runtime-only segment lookup hint.
+ * @param table Table to update; a null pointer is ignored.
  */
 void measure_svc_cal_table_invalidate_cache(measure_svc_cal_table_t *table);
 

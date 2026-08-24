@@ -19,8 +19,9 @@
  * @brief Fake/random raw measurement provider for development and fallback use.
  */
 
-#include "measure_svc.h"
+#include "measure_provider.h"
 
+#include <limits.h>
 #include <stdint.h>
 
 #include "esp_random.h"
@@ -92,6 +93,35 @@ static esp_err_t measure_prov_fake_read_raw(
     return ESP_ERR_INVALID_ARG;
 }
 
+static uint32_t measure_prov_fake_raw_code_to_u4(int16_t raw_code)
+{
+    if (raw_code <= 0) {
+        return 0U;
+    }
+    return (uint32_t)(((uint64_t)(uint16_t)raw_code * 20480U + 16383U) / 32767U);
+}
+
+static esp_err_t measure_prov_fake_read_raw_sample(
+    measure_input_t input,
+    measure_kind_t kind,
+    uint32_t *value_u4,
+    int16_t *raw_code)
+{
+    if ((value_u4 == NULL) || (raw_code == NULL)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_err_t err = measure_prov_fake_read_raw(input, kind, value_u4);
+    if (err != ESP_OK) {
+        return err;
+    }
+    uint32_t code = ((uint64_t)*value_u4 * 32767U + 10240U) / 20480U;
+    if (code > INT16_MAX) {
+        code = INT16_MAX;
+    }
+    *raw_code = (int16_t)code;
+    return ESP_OK;
+}
+
 static esp_err_t measure_prov_fake_read(
     measure_input_t input,
     measure_kind_t kind,
@@ -104,6 +134,8 @@ static const measure_provider_t s_fake_prov = {
     .name = "FAKE_RANDOM",
     .read_value_u4 = measure_prov_fake_read,
     .read_raw_value_u4 = measure_prov_fake_read_raw,
+    .read_raw_sample = measure_prov_fake_read_raw_sample,
+    .raw_code_to_value_u4 = measure_prov_fake_raw_code_to_u4,
 };
 
 const measure_provider_t *measure_prov_fake_get(void)

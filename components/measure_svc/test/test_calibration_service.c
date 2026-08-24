@@ -15,10 +15,13 @@
  */
 
 #include "measure_svc.h"
+#include "measure_svc_calibration.h"
+#include "measure_svc_samples.h"
+#include "../measure_svc_calibration_runtime.h"
 #include "../measure_svc_calibration_persistence.h"
 #include "../measure_svc_calibration_record.h"
-#include "../measure_svc_internal.h"
-#include "../measure_svc_storage.h"
+#include "../measure_svc_calibration_capture_config.h"
+#include "../measure_svc_event_bus.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -60,6 +63,15 @@ static void ensure_measure_runtime(void)
     };
     TEST_ESP_OK(measure_svc_init_with_config(&config));
     initialized = true;
+}
+
+static void ensure_calibration_transaction_idle(void)
+{
+    measure_svc_cal_transaction_t transaction;
+    TEST_ESP_OK(measure_svc_calibration_get_transaction(&transaction));
+    if (transaction.state != MEASURE_SVC_CAL_TRANSACTION_IDLE) {
+        TEST_ESP_OK(measure_svc_calibration_abort());
+    }
 }
 
 static measure_input_t input_for(measure_kind_t kind, measure_channel_t channel)
@@ -104,13 +116,20 @@ static esp_err_t capture_point_with_raw(
         pdPASS,
         xTaskCreate(capture_task, "cal_cap", 4096U, &args, 5U, NULL));
     vTaskDelay(pdMS_TO_TICKS(50U));
-    measure_svc_storage_store_sample(
-        channel,
-        kind,
-        input_for(kind, channel),
-        0U,
-        raw_u4,
-        raw_u4);
+    const int16_t raw_code = (int16_t)(((uint64_t)raw_u4 * 32767U + 10240U) / 20480U);
+    for (uint8_t i = 0U;
+         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         ++i) {
+        const measure_svc_sample_event_t event = {
+            .channel = channel,
+            .kind = kind,
+            .physical_input = input_for(kind, channel),
+            .raw_value_u4 = raw_u4,
+            .raw_code = raw_code,
+            .value_u4 = raw_u4,
+        };
+        measure_svc_event_bus_publish(&event);
+    }
 
     for (uint8_t i = 0; i < 50U; ++i) {
         if (args.result != ESP_ERR_INVALID_STATE) {
@@ -119,6 +138,24 @@ static esp_err_t capture_point_with_raw(
         vTaskDelay(pdMS_TO_TICKS(10U));
     }
     return args.result;
+}
+
+static void store_calibration_raw_code(
+    measure_kind_t kind,
+    measure_channel_t channel,
+    int16_t raw_code)
+{
+    const uint32_t raw_u4 = raw_code <= 0 ? 0U :
+        (uint32_t)(((uint64_t)(uint16_t)raw_code * 20480U + 16383U) / 32767U);
+    const measure_svc_sample_event_t event = {
+        .channel = channel,
+        .kind = kind,
+        .physical_input = input_for(kind, channel),
+        .raw_value_u4 = raw_u4,
+        .raw_code = raw_code,
+        .value_u4 = raw_u4,
+    };
+    measure_svc_event_bus_publish(&event);
 }
 
 static void write_blob(const char *key, const uint8_t *record, size_t record_size)
@@ -133,6 +170,14 @@ static void write_blob(const char *key, const uint8_t *record, size_t record_siz
 TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibration][lifecycle]")
 {
     ensure_measure_runtime();
+    ensure_calibration_transaction_idle();
+
+    const uint32_t active_before = measure_svc_calibration_apply_target_u4(
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U);
+    const uint32_t voltage_ch1_before = measure_svc_calibration_apply_target_u4(
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U);
+    const uint32_t current_ch1_before = measure_svc_calibration_apply_target_u4(
+        MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U);
 
     uint8_t count = 0U;
     TEST_ESP_OK(measure_svc_calibration_get_count(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &count));
@@ -158,11 +203,20 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
     TEST_ASSERT_EQUAL_UINT32(1100U, point.raw_voltage_u4);
     TEST_ASSERT_EQUAL_UINT32(11000U, point.actual_voltage_u4);
 
-    TEST_ASSERT_NOT_EQUAL(22000U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U));
+    TEST_ASSERT_EQUAL_UINT32(
+        active_before,
+        measure_svc_calibration_apply_target_u4(
+            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U));
     TEST_ESP_OK(measure_svc_calibration_commit());
     TEST_ASSERT_EQUAL_UINT32(22000U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U));
-    TEST_ASSERT_EQUAL_UINT32(175000U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U));
-    TEST_ASSERT_EQUAL_UINT32(10000U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U));
+    TEST_ASSERT_EQUAL_UINT32(
+        voltage_ch1_before,
+        measure_svc_calibration_apply_target_u4(
+            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U));
+    TEST_ASSERT_EQUAL_UINT32(
+        current_ch1_before,
+        measure_svc_calibration_apply_target_u4(
+            MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U));
 
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_commit());
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_abort());
@@ -171,6 +225,7 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
 TEST_CASE("calibration invalid commit and persistence failure keep transaction open", "[calibration][failure]")
 {
     ensure_measure_runtime();
+    ensure_calibration_transaction_idle();
     reset_nvs();
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1));
@@ -197,6 +252,7 @@ TEST_CASE("calibration invalid commit and persistence failure keep transaction o
 TEST_CASE("calibration stale capture cannot publish after abort", "[calibration][concurrency]")
 {
     ensure_measure_runtime();
+    ensure_calibration_transaction_idle();
     reset_nvs();
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1));
@@ -212,7 +268,11 @@ TEST_CASE("calibration stale capture cannot publish after abort", "[calibration]
     TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "stale_cap", 4096U, &args, 5U, NULL));
     vTaskDelay(pdMS_TO_TICKS(50U));
     TEST_ESP_OK(measure_svc_calibration_abort());
-    measure_svc_storage_store_sample(MEASURE_CHANNEL_1, MEASURE_KIND_VOLTAGE, MEASURE_INPUT_ADS1115_AIN1, 0U, 1234U, 1234U);
+    for (uint8_t i = 0U;
+         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         ++i) {
+        store_calibration_raw_code(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 1974);
+    }
     vTaskDelay(pdMS_TO_TICKS(100U));
 
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, args.result);
@@ -222,6 +282,7 @@ TEST_CASE("calibration stale capture cannot publish after abort", "[calibration]
 TEST_CASE("calibration startup loads blob legacy missing invalid and independent fallback", "[calibration][startup]")
 {
     ensure_measure_runtime();
+    ensure_calibration_transaction_idle();
     reset_nvs();
 
     const measure_svc_cal_table_t valid = {

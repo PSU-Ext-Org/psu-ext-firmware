@@ -15,6 +15,7 @@
  */
 
 #include "measure_svc.h"
+#include "measure_svc_calibration.h"
 #include "scpi_handler.h"
 
 #include "nvs_flash.h"
