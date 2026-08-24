@@ -15,12 +15,16 @@
 idf_component_register(
     SRCS
         "measure_prov_ads1115.c"
+        "measure_svc_average.c"
         "measure_svc_calibration.c"
-        "measure_svc_calibration_compat.c"
+        "measure_svc_calibration_capture.c"
         "measure_svc_calibration_persistence.c"
         "measure_svc_calibration_record.c"
         "measure_svc_calibration_table.c"
-        "measure_svc_storage.c"
+        "measure_svc_event_bus.c"
+        "measure_svc_history.c"
+        "measure_svc_power.c"
+        "measure_svc_sampler.c"
         "measure_svc.c"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES esp_driver_i2c esp_rom esp_timer nvs_flash

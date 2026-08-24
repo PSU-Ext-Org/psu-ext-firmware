@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include "measure_svc.h"
-#include "measure_svc_calibration.h"
-#include "measure_svc_samples.h"
-#include "unity.h"
+#pragma once
 
-TEST_CASE("calibration infrastructure smoke", "[calibration][smoke]")
-{
-    TEST_ASSERT_EQUAL_UINT32(8U, MEASURE_SVC_CAL_MAX_POINTS);
-}
+#include "esp_err.h"
+
+/**
+ * @file measure_svc_average.h
+ * @brief Private initialization contract for averaged latest-value reads.
+ */
+
+/** @brief Load averaging settings and prepare the averaging module. */
+esp_err_t measure_svc_average_init(void);

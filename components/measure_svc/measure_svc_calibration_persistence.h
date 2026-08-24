@@ -22,18 +22,35 @@
 #pragma once
 
 #include "esp_err.h"
-#include "measure_provider.h"
+#include "measure_types.h"
 #include "measure_svc_calibration_table.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/**
+ * @brief Load one calibration target, including legacy two-point migration.
+ *
+ * Missing or malformed records produce the target's safe default table.
+ *
+ * @param kind Calibration quantity selecting the storage key.
+ * @param channel Logical channel selecting the storage key.
+ * @param table Destination active table.
+ * @return `ESP_OK` when a stored/default table is available, or an NVS error.
+ */
 esp_err_t measure_svc_cal_persistence_load(
     measure_kind_t kind,
     measure_channel_t channel,
     measure_svc_cal_table_t *table);
 
+/**
+ * @brief Encode and commit one validated calibration table to NVS.
+ * @param kind Calibration quantity selecting the storage key.
+ * @param channel Logical channel selecting the storage key.
+ * @param table Table to encode in the stable record format.
+ * @return `ESP_OK` or an argument, encoding, or NVS error.
+ */
 esp_err_t measure_svc_cal_persistence_store(
     measure_kind_t kind,
     measure_channel_t channel,

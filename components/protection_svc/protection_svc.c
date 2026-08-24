@@ -25,7 +25,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "measure_svc.h"
+#include "measure_svc_samples.h"
 #include "nvs.h"
 #include "output_ctrl.h"
 

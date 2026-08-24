@@ -20,6 +20,7 @@
  */
 
 #include "scpi_handler_internal.h"
+#include "measure_svc_calibration.h"
 
 #include <inttypes.h>
 #include <stdbool.h>

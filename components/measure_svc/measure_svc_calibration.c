@@ -19,11 +19,12 @@
  * @brief Active calibration tables and single-table transaction service.
  */
 
-#include "measure_svc.h"
+#include "measure_svc_calibration.h"
+#include "measure_svc_calibration_capture.h"
 #include "measure_svc_calibration_persistence.h"
+#include "measure_svc_calibration_runtime.h"
 #include "measure_svc_calibration_table.h"
-#include "measure_svc_internal.h"
-#include "measure_svc_storage.h"
+#include "measure_svc_core.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -177,7 +178,7 @@ esp_err_t measure_svc_calibration_capture_point(
 
     measure_input_t physical_input;
     ESP_RETURN_ON_ERROR(
-        measure_svc_get_physical_input(channel, kind, &physical_input),
+        measure_svc_core_get_physical_input(channel, kind, &physical_input),
         TAG,
         "resolving calibration input failed");
 
@@ -194,15 +195,21 @@ esp_err_t measure_svc_calibration_capture_point(
     const uint32_t generation = s_transaction_generation;
     xSemaphoreGive(s_calibration_lock);
 
-    uint32_t raw_u4;
+    int16_t raw_code;
     ESP_RETURN_ON_ERROR(
-        measure_svc_storage_wait_for_fresh_raw_sample(
+        measure_svc_calibration_capture_wait(
             channel,
             kind,
             physical_input,
-            &raw_u4),
+            &raw_code),
         TAG,
         "waiting for fresh calibration sample failed");
+
+    uint32_t raw_u4;
+    ESP_RETURN_ON_ERROR(
+        measure_svc_core_raw_code_to_u4(raw_code, &raw_u4),
+        TAG,
+        "converting fresh calibration sample failed");
 
     ESP_RETURN_ON_ERROR(take_calibration_lock(), TAG, "taking calibration lock failed");
     if ((s_transaction_state != MEASURE_SVC_CAL_TRANSACTION_OPEN) ||

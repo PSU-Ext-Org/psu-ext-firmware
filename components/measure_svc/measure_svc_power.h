@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include "measure_svc.h"
-#include "measure_svc_calibration.h"
-#include "measure_svc_samples.h"
-#include "unity.h"
+#pragma once
 
-TEST_CASE("calibration infrastructure smoke", "[calibration][smoke]")
-{
-    TEST_ASSERT_EQUAL_UINT32(8U, MEASURE_SVC_CAL_MAX_POINTS);
-}
+#include "esp_err.h"
+
+/**
+ * @file measure_svc_power.h
+ * @brief Private initialization contract for CH1 derived-power events.
+ */
+
+/** @brief Register the voltage/current listener that pairs samples into power. */
+esp_err_t measure_svc_power_init(void);

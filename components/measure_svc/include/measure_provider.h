@@ -24,41 +24,55 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "measure_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
-    MEASURE_CHANNEL_0 = 0,
-    MEASURE_CHANNEL_1 = 1,
-} measure_channel_t;
-
-typedef enum {
-    MEASURE_INPUT_UNUSED = -1,
-    MEASURE_INPUT_ADS1115_AIN0 = 0,
-    MEASURE_INPUT_ADS1115_AIN1 = 1,
-    MEASURE_INPUT_ADS1115_AIN2 = 2,
-    MEASURE_INPUT_ADS1115_AIN3 = 3,
-} measure_input_t;
-
-typedef enum {
-    MEASURE_KIND_VOLTAGE = 0,
-    MEASURE_KIND_CURRENT = 1,
-    MEASURE_KIND_POWER = 2,
-} measure_kind_t;
-
+/**
+ * @brief Measurement-provider operations used by the service core.
+ *
+ * Values use unsigned u4 fixed point (physical unit multiplied by 10,000).
+ * Native ADC codes remain signed so calibration capture can average before
+ * converting and rounding to u4.
+ */
 typedef struct {
-    const char *name;
+    const char *name; /**< Stable human-readable provider name. */
+    /** Read one provider value in u4. */
     esp_err_t (*read_value_u4)(
         measure_input_t input,
         measure_kind_t kind,
         uint32_t *value_u4);
+    /** Read one fresh uncalibrated provider value in u4. */
     esp_err_t (*read_raw_value_u4)(
         measure_input_t input,
         measure_kind_t kind,
         uint32_t *value_u4);
+    /** Read one fresh ADC conversion with both display and native-code forms. */
+    esp_err_t (*read_raw_sample)(
+        measure_input_t input,
+        measure_kind_t kind,
+        uint32_t *value_u4,
+        int16_t *raw_code);
+    /** Convert a native ADC code to the provider's raw u4 representation. */
+    uint32_t (*raw_code_to_value_u4)(int16_t raw_code);
 } measure_provider_t;
+
+/**
+ * @brief Replace the active measurement provider.
+ * @param provider Provider whose name and callbacks all remain valid for the
+ * lifetime of the service.
+ * @return `ESP_OK`, or `ESP_ERR_INVALID_ARG` if a required member is missing.
+ */
+esp_err_t measure_svc_set_prov(const measure_provider_t *provider);
+
+/** @brief Initialize the production ADS1115 provider. */
+esp_err_t measure_prov_ads1115_init(void);
+/** @brief Return the production ADS1115 provider contract. */
+const measure_provider_t *measure_prov_ads1115_get(void);
+/** @brief Return the synthetic provider used by tests and diagnostics. */
+const measure_provider_t *measure_prov_fake_get(void);
 
 #ifdef __cplusplus
 }

@@ -20,6 +20,7 @@
  */
 
 #include "measure_svc.h"
+#include "measure_provider.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -40,7 +41,6 @@ static const uint8_t ADS_I2C_ADDR = 0x48;
 static const int ADS_I2C_TIMEOUT_MS = 50;
 static const TickType_t ADS_CONVERSION_POLL_DELAY = pdMS_TO_TICKS(1);
 static const TickType_t ADS_CONVERSION_READY_TIMEOUT = pdMS_TO_TICKS(20);
-static const float ADS_FULL_SCALE_VOLTAGE = 2.048f;
 
 enum {
     ADS1115_REG_CONVERSION = 0x00,
@@ -319,12 +319,54 @@ static esp_err_t ads1115_read_single_shot(ads1115_mux_t mux, int16_t *raw_value)
  */
 static uint32_t ads1115_raw_to_voltage_u4(int16_t raw_value)
 {
-    float voltage = ((float)raw_value * ADS_FULL_SCALE_VOLTAGE) / 32767.0f;
-    if (voltage <= 0.0f) {
+    if (raw_value <= 0) {
         return 0U;
     }
 
-    return (uint32_t)(voltage * 10000.0f);
+    return (uint32_t)(((uint64_t)(uint16_t)raw_value * 20480U + 16383U) / 32767U);
+}
+
+static esp_err_t measure_prov_ads1115_read_raw_sample(
+    measure_input_t input,
+    measure_kind_t kind,
+    uint32_t *value_u4,
+    int16_t *raw_code)
+{
+    if ((value_u4 == NULL) || (raw_code == NULL)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (kind != MEASURE_KIND_VOLTAGE) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    if (!s_ads_initialized || (s_ads_lock == NULL)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ads1115_mux_t mux;
+    ESP_RETURN_ON_ERROR(measure_prov_ads1115_input_to_mux(input, &mux), TAG, "Unsupported measurement input");
+    if (xSemaphoreTake(s_ads_lock, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    bool mux_changed = !s_last_mux_valid || (s_last_mux != mux);
+    if (mux_changed) {
+        int16_t discarded_code;
+        esp_err_t err = ads1115_read_single_shot(mux, &discarded_code);
+        if (err != ESP_OK) {
+            xSemaphoreGive(s_ads_lock);
+            return err;
+        }
+    }
+
+    esp_err_t err = ads1115_read_single_shot(mux, raw_code);
+    if (err == ESP_OK) {
+        s_last_mux = mux;
+        s_last_mux_valid = true;
+        *value_u4 = ads1115_raw_to_voltage_u4(*raw_code);
+    }
+    xSemaphoreGive(s_ads_lock);
+    return err;
 }
 
 /**
@@ -352,44 +394,8 @@ static esp_err_t measure_prov_ads1115_read_raw_voltage(
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (!s_ads_initialized || (s_ads_lock == NULL)) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    ads1115_mux_t mux;
-    ESP_RETURN_ON_ERROR(
-        measure_prov_ads1115_input_to_mux(input, &mux),
-        TAG,
-        "Unsupported measurement input"
-    );
-
-    if (xSemaphoreTake(s_ads_lock, portMAX_DELAY) != pdTRUE) {
-        return ESP_ERR_TIMEOUT;
-    }
-
     int16_t raw_value = 0;
-    bool mux_changed = !s_last_mux_valid || (s_last_mux != mux);
-    if (mux_changed) {
-        /* Throw away the first sample after a mux switch so the next one reflects the new channel cleanly. */
-        esp_err_t err = ads1115_read_single_shot(mux, &raw_value);
-        if (err != ESP_OK) {
-            xSemaphoreGive(s_ads_lock);
-            return err;
-        }
-    }
-
-    esp_err_t err = ads1115_read_single_shot(mux, &raw_value);
-    if (err == ESP_OK) {
-        s_last_mux = mux;
-        s_last_mux_valid = true;
-    }
-    xSemaphoreGive(s_ads_lock);
-    if (err != ESP_OK) {
-        return err;
-    }
-
-    *value_u4 = ads1115_raw_to_voltage_u4(raw_value);
-    return ESP_OK;
+    return measure_prov_ads1115_read_raw_sample(input, MEASURE_KIND_VOLTAGE, value_u4, &raw_value);
 }
 
 static esp_err_t measure_prov_ads1115_read_raw(
@@ -416,6 +422,8 @@ static const measure_provider_t s_ads1115_provider = {
     .name = "ADS1115",
     .read_value_u4 = measure_prov_ads1115_read,
     .read_raw_value_u4 = measure_prov_ads1115_read_raw,
+    .read_raw_sample = measure_prov_ads1115_read_raw_sample,
+    .raw_code_to_value_u4 = ads1115_raw_to_voltage_u4,
 };
 
 esp_err_t measure_prov_ads1115_init(void)
