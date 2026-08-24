@@ -78,9 +78,9 @@ typedef void (*measure_svc_sample_listener_fn_t)(
 #define MEASURE_SVC_MIN_SAMPLE_RATE_HZ 10U
 #define MEASURE_SVC_MAX_SAMPLE_RATE_HZ 100U
 #define MEASURE_SVC_MIN_AVERAGE_COUNT 1U
-#define MEASURE_SVC_MAX_AVERAGE_COUNT 50U
-#define MEASURE_SVC_DEFAULT_AVERAGE_COUNT 10U
-#define MEASURE_SVC_MAX_SAMPLE_CAPACITY 600U
+#define MEASURE_SVC_MAX_AVERAGE_COUNT 100U
+#define MEASURE_SVC_DEFAULT_AVERAGE_COUNT 50U
+#define MEASURE_SVC_MAX_SAMPLE_CAPACITY 1000U
 #define MEASURE_SVC_MAX_SAMPLE_LISTENERS 8U
 
 #ifndef MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ
@@ -130,6 +130,8 @@ esp_err_t measure_svc_start_sampling(void);
  *
  * Values outside the supported range are clamped to
  * `MEASURE_SVC_MIN_AVERAGE_COUNT..MEASURE_SVC_MAX_AVERAGE_COUNT`.
+ * If no persisted value exists, the service uses
+ * `MEASURE_SVC_DEFAULT_AVERAGE_COUNT` (50 samples).
  */
 esp_err_t measure_svc_set_average_count(measure_kind_t kind, uint32_t count);
 
@@ -189,7 +191,8 @@ esp_err_t measure_svc_read(
  * @brief Copy calibrated voltage history samples for logical CH0 or CH1.
  *
  * Samples are copied in oldest-to-newest order. Values are calibrated PSU
- * voltages scaled by 10,000.
+ * voltages scaled by 10,000. Each history ring retains at most
+ * `MEASURE_SVC_MAX_SAMPLE_CAPACITY` (1000) samples.
  *
  * @param channel Logical measurement channel to export.
  * @param start_offset Oldest-relative sample offset.
@@ -213,7 +216,8 @@ esp_err_t measure_svc_copy_voltage_samples(
  * @brief Copy calibrated current history samples for the logical power path.
  *
  * Samples are copied in oldest-to-newest order. Values are calibrated PSU
- * currents scaled by 10,000.
+ * currents scaled by 10,000. The history ring retains at most
+ * `MEASURE_SVC_MAX_SAMPLE_CAPACITY` (1000) samples.
  *
  * @param channel Logical measurement channel to export. Only CH1 is public.
  * @param start_offset Oldest-relative sample offset.
@@ -238,6 +242,8 @@ esp_err_t measure_svc_copy_current_samples(
  *
  * Samples are copied in oldest-to-newest order. Values are watts scaled by
  * 10,000 and are derived from calibrated voltage and current sample pairs.
+ * The history ring retains at most `MEASURE_SVC_MAX_SAMPLE_CAPACITY` (1000)
+ * samples.
  *
  * @param channel Logical measurement channel to export. Only CH1 is public.
  * @param start_offset Oldest-relative sample offset.
