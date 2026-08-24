@@ -42,14 +42,14 @@ Scalar readings return decimal values with four fractional digits.
 | `MEAS:VOLT? <channel>` | `<volts>` | `0`/`CH0` reads input voltage. `1`/`CH1` reads output voltage. |
 | `MEAS:CURR? CH1` | `<amps>` | `1` is also accepted. `CH0` is rejected. |
 | `MEAS:POWER? CH1` | `<watts>` | `1` is also accepted. `CH0` is rejected. |
-| `MEAS:VOLT:AVER:COUN <count>` | none | Sets persisted scalar voltage averaging count. Values are clamped to `1..50`. |
+| `MEAS:VOLT:AVER:COUN <count>` | none | Sets persisted scalar voltage averaging count. Values are clamped to `1..100`. |
 | `MEAS:VOLT:AVER:COUN?` | `<count>` | Returns voltage averaging count. |
-| `MEAS:CURR:AVER:COUN <count>` | none | Sets persisted scalar current averaging count. Values are clamped to `1..50`. |
+| `MEAS:CURR:AVER:COUN <count>` | none | Sets persisted scalar current averaging count. Values are clamped to `1..100`. |
 | `MEAS:CURR:AVER:COUN?` | `<count>` | Returns current averaging count. |
-| `MEAS:POWER:AVER:COUN <count>` | none | Sets persisted scalar power averaging count. Values are clamped to `1..50`. |
+| `MEAS:POWER:AVER:COUN <count>` | none | Sets persisted scalar power averaging count. Values are clamped to `1..100`. |
 | `MEAS:POWER:AVER:COUN?` | `<count>` | Returns power averaging count. |
 
-The default averaging count is `10`. A count of `1` returns the newest stored
+The default averaging count is `50`. A count of `1` returns the newest stored
 calibrated sample. If fewer than the configured count are available, the
 firmware averages all currently available samples.
 
@@ -83,7 +83,7 @@ uint32_t value_u4;
 
 `time_ms` is device uptime in milliseconds. `value_u4` is volts, amps, or watts
 multiplied by `10000`. Records are returned oldest-to-newest. `count` is
-clamped to the storage capacity of `600` samples. `start_offset` is relative to
+clamped to the storage capacity of `1000` samples. `start_offset` is relative to
 the oldest currently buffered sample and defaults to `0`.
 
 Example header for three records:
