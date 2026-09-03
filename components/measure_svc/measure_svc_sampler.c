@@ -62,8 +62,12 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
 {
     uint32_t raw_u4;
     int16_t raw_code;
+    uint32_t source_generation;
     esp_err_t err = measure_svc_core_read_raw_sample(
-        input, MEASURE_KIND_VOLTAGE, &raw_u4, &raw_code);
+        input, MEASURE_KIND_VOLTAGE, &raw_u4, &raw_code, &source_generation);
+    if (err == ESP_ERR_NOT_FINISHED) {
+        return;
+    }
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "sampling AIN%d failed: %s", (int)input, esp_err_to_name(err));
         return;
@@ -76,6 +80,7 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
         .time_ms = (uint32_t)(esp_timer_get_time() / 1000LL),
         .raw_value_u4 = raw_u4,
         .raw_code = raw_code,
+        .source_generation = source_generation,
         .value_u4 = measure_svc_calibration_apply_target_u4(kind, channel, raw_u4),
     };
     measure_svc_event_bus_publish(&event);

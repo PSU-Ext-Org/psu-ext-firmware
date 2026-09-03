@@ -20,6 +20,7 @@
  */
 
 #include "scpi_handler_internal.h"
+#include "measure_svc.h"
 #include "measure_svc_samples.h"
 
 #include <inttypes.h>
@@ -29,6 +30,7 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -38,8 +40,8 @@
 
 static const char *TAG = "scpi_measure";
 static SemaphoreHandle_t s_data_response_lock;
-static measure_svc_sample_t s_data_samples[MEASURE_SVC_MAX_SAMPLE_CAPACITY];
-static uint8_t s_data_response_buffer[SCPI_HANDLER_DATA_RESPONSE_BUFFER_SIZE];
+static measure_svc_sample_t *s_data_samples;
+static uint8_t *s_data_response_buffer;
 
 typedef struct {
     measure_channel_t channel;
@@ -139,6 +141,25 @@ static esp_err_t scpi_handler_take_data_response_lock(void)
         }
     }
 
+    if (s_data_samples == NULL) {
+        s_data_samples = heap_caps_malloc(
+            MEASURE_SVC_MAX_SAMPLE_CAPACITY * sizeof(*s_data_samples),
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (s_data_samples == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    if (s_data_response_buffer == NULL) {
+        s_data_response_buffer = heap_caps_malloc(
+            SCPI_HANDLER_DATA_RESPONSE_BUFFER_SIZE,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (s_data_response_buffer == NULL) {
+            heap_caps_free(s_data_samples);
+            s_data_samples = NULL;
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
     return xSemaphoreTake(s_data_response_lock, portMAX_DELAY) == pdTRUE ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
@@ -206,6 +227,38 @@ static void scpi_handler_handle_average_count_query(
     }
 
     snprintf(response, sizeof(response), "%" PRIu32, count);
+    write_response(response);
+}
+
+static void scpi_handler_handle_adc_rate_set(
+    scpi_handler_parsed_command_t *parsed,
+    scpi_handler_write_response_fn_t write_response)
+{
+    size_t rate;
+    if ((parsed->argument == NULL) ||
+        !scpi_handler_parse_size_arg(parsed->argument, &rate) ||
+        (rate > UINT16_MAX)) {
+        write_response("ERR,\"Expected ADS1115 rate: 8|16|32|64|128|250|475|860\"");
+        return;
+    }
+
+    const esp_err_t err = measure_svc_set_adc_data_rate_sps((uint16_t)rate);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(write_response, "MEAS:ADC:RATE", err);
+    }
+}
+
+static void scpi_handler_handle_adc_rate_query(
+    scpi_handler_write_response_fn_t write_response)
+{
+    uint16_t rate;
+    char response[8];
+    const esp_err_t err = measure_svc_get_adc_data_rate_sps(&rate);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(write_response, "MEAS:ADC:RATE?", err);
+        return;
+    }
+    snprintf(response, sizeof(response), "%u", (unsigned)rate);
     write_response(response);
 }
 
@@ -301,6 +354,18 @@ bool scpi_handler_handle_measure_command(
     scpi_handler_parsed_command_t *parsed,
     const scpi_handler_response_writer_t *writer)
 {
+    if ((strcmp(keyword, "MEAS:ADC:RATE") == 0) ||
+        (strcmp(keyword, "MEASURE:ADC:RATE") == 0)) {
+        scpi_handler_handle_adc_rate_set(parsed, writer->write_text);
+        return true;
+    }
+
+    if ((strcmp(keyword, "MEAS:ADC:RATE?") == 0) ||
+        (strcmp(keyword, "MEASURE:ADC:RATE?") == 0)) {
+        scpi_handler_handle_adc_rate_query(writer->write_text);
+        return true;
+    }
+
     if (strcmp(keyword, "MEAS:VOLT:AVER:COUN") == 0) {
         scpi_handler_handle_average_count_set(parsed, MEASURE_KIND_VOLTAGE, writer->write_text);
         return true;

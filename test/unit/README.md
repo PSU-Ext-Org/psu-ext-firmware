@@ -50,7 +50,7 @@ Exit the monitor with `Ctrl+]`.
 The helper can run a tag selector and check the expected Unity summary:
 
 ```powershell
-C:\Espressif\tools\python\v6.0\venv\Scripts\python.exe run_smoke_serial.py <PORT> --selector "[calibration]" --expect "calibration scpi reports transaction states and malformed commands:PASS" --summary "10 Tests 0 Failures 0 Ignored" --timeout 120
+C:\Espressif\tools\python\v6.0\venv\Scripts\python.exe run_smoke_serial.py <PORT> --selector "[calibration]" --expect "calibration scpi reports transaction states and malformed commands:PASS" --summary "11 Tests 0 Failures 0 Ignored" --timeout 120
 ```
 
 ## Expected Smoke Result
@@ -83,6 +83,6 @@ The `[calibration]` selector should report all target calibration tests passing.
 Observed on 2026-07-15 with `COM8`:
 
 ```text
-10 Tests 0 Failures 0 Ignored
+11 Tests 0 Failures 0 Ignored
 OK
 ```

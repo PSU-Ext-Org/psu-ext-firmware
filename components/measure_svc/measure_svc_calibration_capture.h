@@ -29,7 +29,7 @@
 
 /** @brief State accumulated for one discard-and-collect capture attempt. */
 typedef struct {
-    uint8_t discard_remaining; /**< Initial fresh events still to ignore. */
+    uint8_t discard_remaining; /**< Initial unique conversions still to ignore. */
     uint8_t sample_count; /**< Native codes included in the sum. */
     int64_t code_sum; /**< Signed sum used to avoid overflow and early rounding. */
     int16_t code_min; /**< Smallest collected native code. */

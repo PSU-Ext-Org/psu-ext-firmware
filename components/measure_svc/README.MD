@@ -39,10 +39,12 @@ modules. Application components must not depend on them.
 
 ## Data flow
 
-Each active physical input is sampled independently at the configured rate:
+The ADS1115 provider refreshes a three-input cache in a background single-shot
+scan. The sampler publishes the latest cached value independently at its
+configured rate:
 
 ```text
-provider -> sampler -> active calibration -> sample event
+ADS1115 scan -> cache -> sampler -> active calibration -> sample event
                                       |-> history -> averaged reads
                                       |-> power pairing -> power event/history
                                       |-> calibration capture (native raw code)
@@ -53,6 +55,15 @@ The production application maps input voltage to ADS1115 AIN0, output voltage
 to AIN1, and output current sensing to AIN2. Logical CH0 represents input
 voltage when configured. Logical CH1 represents output voltage, output current,
 and derived output power.
+
+`MEASure:ADC:RATE <SPS>` selects the persistent ADS1115 conversion rate and
+`MEASure:ADC:RATE?` queries it. Supported values are 8, 16, 32, 64, 128, 250,
+475, and 860 SPS; the default is 128 SPS. The sampler continues publishing at
+100 Hz per channel, so cached ADC values repeat between background conversions.
+Calibration counts only unique ADC conversions.
+
+The ADS conversion cache, averaging scratch window, SCPI history scratch
+buffers, and all measurement-history rings are allocated strictly in PSRAM.
 
 ## Protection mapping
 
@@ -109,8 +120,7 @@ compatibility.
 ## Modules
 
 - `measure_svc.c` is the composition root and provider/router owner.
-- `measure_svc_sampler.c` schedules fresh provider conversions and publishes
-  calibrated events.
+- `measure_svc_sampler.c` publishes cached provider values as calibrated events.
 - `measure_svc_event_bus.c` owns the synchronous listener registry.
 - `measure_svc_history.c` stores calibrated samples in PSRAM ring buffers.
 - `measure_svc_average.c` persists average-window sizes and serves averaged

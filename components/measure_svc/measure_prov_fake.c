@@ -105,9 +105,11 @@ static esp_err_t measure_prov_fake_read_raw_sample(
     measure_input_t input,
     measure_kind_t kind,
     uint32_t *value_u4,
-    int16_t *raw_code)
+    int16_t *raw_code,
+    uint32_t *source_generation)
 {
-    if ((value_u4 == NULL) || (raw_code == NULL)) {
+    static uint32_t generation;
+    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL)) {
         return ESP_ERR_INVALID_ARG;
     }
     esp_err_t err = measure_prov_fake_read_raw(input, kind, value_u4);
@@ -119,6 +121,11 @@ static esp_err_t measure_prov_fake_read_raw_sample(
         code = INT16_MAX;
     }
     *raw_code = (int16_t)code;
+    ++generation;
+    if (generation == 0U) {
+        ++generation;
+    }
+    *source_generation = generation;
     return ESP_OK;
 }
 

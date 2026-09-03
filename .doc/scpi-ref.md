@@ -42,6 +42,8 @@ Scalar readings return decimal values with four fractional digits.
 | `MEAS:VOLT? <channel>` | `<volts>` | `0`/`CH0` reads input voltage. `1`/`CH1` reads output voltage. |
 | `MEAS:CURR? CH1` | `<amps>` | `1` is also accepted. `CH0` is rejected. |
 | `MEAS:POWER? CH1` | `<watts>` | `1` is also accepted. `CH0` is rejected. |
+| `MEAS:ADC:RATE <sps>` | none | Sets the persisted ADS1115 conversion rate. Accepted values: `8`, `16`, `32`, `64`, `128`, `250`, `475`, or `860`. `MEASURE:ADC:RATE` is also accepted. |
+| `MEAS:ADC:RATE?` | `<sps>` | Returns the active ADS1115 conversion rate. `MEASURE:ADC:RATE?` is also accepted. |
 | `MEAS:VOLT:AVER:COUN <count>` | none | Sets persisted scalar voltage averaging count. Values are clamped to `1..100`. |
 | `MEAS:VOLT:AVER:COUN?` | `<count>` | Returns voltage averaging count. |
 | `MEAS:CURR:AVER:COUN <count>` | none | Sets persisted scalar current averaging count. Values are clamped to `1..100`. |
@@ -52,6 +54,12 @@ Scalar readings return decimal values with four fractional digits.
 The default averaging count is `50`. A count of `1` returns the newest stored
 calibrated sample. If fewer than the configured count are available, the
 firmware averages all currently available samples.
+
+The ADC rate defaults to `128` SPS and applies to all three ADS1115 inputs.
+Acquisition remains single-shot and cycles through the inputs. Measurement
+events continue at 100 samples/s per logical channel, so rates slower than the
+publication rate produce repeated cached values. The rate cannot be changed
+while a calibration transaction is open or committing.
 
 ## Measurement History
 

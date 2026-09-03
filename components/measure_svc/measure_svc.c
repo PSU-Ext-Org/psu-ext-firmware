@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "measure_provider.h"
 #include "measure_svc_average.h"
+#include "measure_svc_calibration.h"
 #include "measure_svc_calibration_capture.h"
 #include "measure_svc_calibration_runtime.h"
 #include "measure_svc_core.h"
@@ -79,15 +80,43 @@ esp_err_t measure_svc_core_read_raw_sample(
     measure_input_t input,
     measure_kind_t kind,
     uint32_t *value_u4,
-    int16_t *raw_code)
+    int16_t *raw_code,
+    uint32_t *source_generation)
 {
-    if ((value_u4 == NULL) || (raw_code == NULL)) {
+    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL)) {
         return ESP_ERR_INVALID_ARG;
     }
     if ((s_provider == NULL) || (s_provider->read_raw_sample == NULL)) {
         return ESP_ERR_NOT_SUPPORTED;
     }
-    return s_provider->read_raw_sample(input, kind, value_u4, raw_code);
+    return s_provider->read_raw_sample(input, kind, value_u4, raw_code, source_generation);
+}
+
+esp_err_t measure_svc_set_adc_data_rate_sps(uint16_t sps)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    measure_svc_cal_transaction_t transaction;
+    ESP_RETURN_ON_ERROR(
+        measure_svc_calibration_get_transaction(&transaction),
+        TAG,
+        "reading calibration state failed");
+    if (transaction.state != MEASURE_SVC_CAL_TRANSACTION_IDLE) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    return measure_prov_ads1115_set_data_rate_sps(sps);
+}
+
+esp_err_t measure_svc_get_adc_data_rate_sps(uint16_t *sps)
+{
+    if (sps == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    return measure_prov_ads1115_get_data_rate_sps(sps);
 }
 
 esp_err_t measure_svc_core_raw_code_to_u4(int16_t raw_code, uint32_t *value_u4)
@@ -134,6 +163,7 @@ esp_err_t measure_svc_init_with_config(const measure_svc_config_t *config)
     ESP_RETURN_ON_ERROR(measure_svc_calibration_capture_init(), TAG, "initializing capture failed");
     ESP_RETURN_ON_ERROR(measure_svc_calibration_init(), TAG, "loading calibration failed");
     ESP_RETURN_ON_ERROR(measure_svc_average_init(), TAG, "loading averaging failed");
+    ESP_RETURN_ON_ERROR(measure_prov_ads1115_init(), TAG, "initializing ADS1115 provider failed");
     ESP_RETURN_ON_ERROR(measure_svc_set_prov(measure_prov_ads1115_get()), TAG, "setting provider failed");
     ESP_RETURN_ON_ERROR(measure_svc_power_init(), TAG, "initializing power derivation failed");
     ESP_RETURN_ON_ERROR(measure_svc_history_register_listeners(), TAG, "registering history failed");

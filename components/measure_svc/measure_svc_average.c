@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include "esp_check.h"
+#include "esp_heap_caps.h"
 #include "nvs.h"
 #include "measure_svc_core.h"
 #include "measure_svc_history.h"
@@ -36,7 +37,7 @@ static uint32_t s_counts[3] = {
     MEASURE_SVC_DEFAULT_AVERAGE_COUNT,
     MEASURE_SVC_DEFAULT_AVERAGE_COUNT,
 };
-static measure_svc_sample_t s_samples[MEASURE_SVC_MAX_AVERAGE_COUNT];
+static measure_svc_sample_t *s_samples;
 
 static esp_err_t kind_slot(measure_kind_t kind, uint32_t **count, const char **key)
 {
@@ -80,6 +81,15 @@ static esp_err_t load_count(const char *key, uint32_t *count)
 
 esp_err_t measure_svc_average_init(void)
 {
+    if (s_samples == NULL) {
+        s_samples = heap_caps_calloc(
+            MEASURE_SVC_MAX_AVERAGE_COUNT,
+            sizeof(*s_samples),
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (s_samples == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
     ESP_RETURN_ON_ERROR(load_count(NVS_VOLTAGE_KEY, &s_counts[0]), TAG, "loading voltage average failed");
     ESP_RETURN_ON_ERROR(load_count(NVS_CURRENT_KEY, &s_counts[1]), TAG, "loading current average failed");
     return load_count(NVS_POWER_KEY, &s_counts[2]);
@@ -128,6 +138,9 @@ esp_err_t measure_svc_read(measure_channel_t channel, measure_kind_t kind, uint3
 
     if (value_u4 == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (s_samples == NULL) {
+        return ESP_ERR_INVALID_STATE;
     }
     if ((channel == MEASURE_CHANNEL_0) && (kind != MEASURE_KIND_VOLTAGE)) {
         return ESP_ERR_INVALID_ARG;

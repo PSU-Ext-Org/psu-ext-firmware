@@ -26,4 +26,4 @@
 #define MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES 2U /**< Fresh samples ignored per attempt. */
 #define MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES 16U /**< Native codes averaged per attempt. */
 #define MEASURE_SVC_CAL_STABILITY_P2P_MAX_CODES 16 /**< Largest accepted code spread. */
-#define MEASURE_SVC_CAL_CAPTURE_TIMEOUT_TICKS pdMS_TO_TICKS(5000U) /**< Shared retry deadline. */
+#define MEASURE_SVC_CAL_CAPTURE_TIMEOUT_TICKS pdMS_TO_TICKS(30000U) /**< Shared retry deadline. */

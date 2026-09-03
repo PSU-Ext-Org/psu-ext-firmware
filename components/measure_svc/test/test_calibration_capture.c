@@ -72,6 +72,18 @@ static void publish_code(int16_t code)
     measure_svc_event_bus_publish(&event);
 }
 
+static void publish_code_generation(int16_t code, uint32_t source_generation)
+{
+    const measure_svc_sample_event_t event = {
+        .kind = MEASURE_KIND_VOLTAGE,
+        .channel = MEASURE_CHANNEL_0,
+        .physical_input = MEASURE_INPUT_ADS1115_AIN0,
+        .raw_code = code,
+        .source_generation = source_generation,
+    };
+    measure_svc_event_bus_publish(&event);
+}
+
 static void wait_for_result(const capture_args_t *args)
 {
     for (uint8_t i = 0U; (i < 50U) && (args->result == ESP_ERR_INVALID_STATE); ++i) {
@@ -161,9 +173,38 @@ TEST_CASE("calibration retries an unstable ADS1115-code window", "[calibration][
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
     capture_args_t timeout_args = {.result = ESP_ERR_INVALID_STATE};
     TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "timeout_cap", 4096U, &timeout_args, 5U, NULL));
-    for (uint16_t i = 0U; (i < 550U) && (timeout_args.result == ESP_ERR_INVALID_STATE); ++i) {
+    for (uint16_t i = 0U; (i < 3050U) && (timeout_args.result == ESP_ERR_INVALID_STATE); ++i) {
         vTaskDelay(pdMS_TO_TICKS(10U));
     }
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, timeout_args.result);
+    TEST_ESP_OK(measure_svc_calibration_abort());
+}
+
+TEST_CASE("calibration ignores repeated publications of one ADC conversion", "[calibration][capture]")
+{
+    ensure_runtime_and_idle();
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    TEST_ESP_OK(measure_svc_calibration_clear(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+
+    capture_args_t args = {.result = ESP_ERR_INVALID_STATE};
+    TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "unique_cap", 4096U, &args, 5U, NULL));
+    vTaskDelay(pdMS_TO_TICKS(50U));
+
+    for (uint32_t generation = 1U;
+         generation < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES +
+             MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         ++generation) {
+        for (uint8_t duplicate = 0U; duplicate < 10U; ++duplicate) {
+            publish_code_generation(1600, generation);
+        }
+    }
+    vTaskDelay(pdMS_TO_TICKS(20U));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, args.result);
+
+    publish_code_generation(
+        1600,
+        MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+    wait_for_result(&args);
+    TEST_ESP_OK(args.result);
     TEST_ESP_OK(measure_svc_calibration_abort());
 }

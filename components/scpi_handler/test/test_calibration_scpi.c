@@ -19,8 +19,10 @@
 #include "scpi_handler.h"
 
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "unity.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static char s_last_response[96];
@@ -104,4 +106,52 @@ TEST_CASE("calibration scpi reports transaction states and malformed commands", 
     char commit_idle[] = "CALibration:COMMit";
     run_scpi(commit_idle);
     TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
+}
+
+TEST_CASE("measurement ADC rate SCPI validates persists and blocks during calibration", "[measurement][scpi]")
+{
+    ensure_runtime();
+    measure_svc_cal_transaction_t transaction;
+    TEST_ESP_OK(measure_svc_calibration_get_transaction(&transaction));
+    if (transaction.state == MEASURE_SVC_CAL_TRANSACTION_OPEN) {
+        TEST_ESP_OK(measure_svc_calibration_abort());
+    }
+
+    static const uint16_t rates[] = {8U, 16U, 32U, 64U, 128U, 250U, 475U, 860U};
+    for (size_t index = 0U; index < (sizeof(rates) / sizeof(rates[0])); ++index) {
+        char set_command[32];
+        snprintf(set_command, sizeof(set_command), "MEAS:ADC:RATE %u", (unsigned)rates[index]);
+        run_scpi(set_command);
+        TEST_ASSERT_FALSE(s_saw_response);
+
+        char query[] = "MEAS:ADC:RATE?";
+        char expected[8];
+        snprintf(expected, sizeof(expected), "%u", (unsigned)rates[index]);
+        run_scpi(query);
+        TEST_ASSERT_EQUAL_STRING(expected, s_last_response);
+    }
+
+    char invalid[] = "MEAS:ADC:RATE 9";
+    run_scpi(invalid);
+    TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
+    char unchanged[] = "MEAS:ADC:RATE?";
+    run_scpi(unchanged);
+    TEST_ASSERT_EQUAL_STRING("860", s_last_response);
+
+    nvs_handle_t handle;
+    uint16_t stored_rate = 0U;
+    TEST_ESP_OK(nvs_open("meas_cfg", NVS_READONLY, &handle));
+    TEST_ESP_OK(nvs_get_u16(handle, "ads_rate_sps", &stored_rate));
+    nvs_close(handle);
+    TEST_ASSERT_EQUAL_UINT16(860U, stored_rate);
+
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    char blocked[] = "MEAS:ADC:RATE 128";
+    run_scpi(blocked);
+    TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
+    TEST_ESP_OK(measure_svc_calibration_abort());
+
+    char restore[] = "MEAS:ADC:RATE 128";
+    run_scpi(restore);
+    TEST_ASSERT_FALSE(s_saw_response);
 }

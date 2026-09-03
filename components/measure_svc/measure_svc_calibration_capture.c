@@ -38,6 +38,7 @@ typedef struct {
     measure_svc_cal_capture_target_t target;
     measure_svc_cal_capture_window_t window;
     int16_t accepted_mean;
+    uint32_t last_source_generation;
 } measure_svc_cal_capture_request_t;
 
 static SemaphoreHandle_t s_capture_lock;
@@ -126,14 +127,21 @@ static void capture_listener(const measure_svc_sample_event_t *event, void *cont
     if (s_request.active && !s_request.ready &&
         (event->channel == s_request.target.channel) &&
         (event->kind == s_request.target.kind) &&
-        (event->physical_input == s_request.target.input) &&
-        measure_svc_cal_capture_window_add(&s_request.window, event->raw_code)) {
-        if (measure_svc_cal_capture_window_is_stable(&s_request.window)) {
-            s_request.accepted_mean = measure_svc_cal_capture_window_mean(&s_request.window);
-            s_request.ready = true;
-            (void)xSemaphoreGive(s_capture_ready);
-        } else {
-            measure_svc_cal_capture_window_reset(&s_request.window);
+        (event->physical_input == s_request.target.input)) {
+        if ((event->source_generation != 0U) &&
+            (event->source_generation == s_request.last_source_generation)) {
+            xSemaphoreGive(s_capture_lock);
+            return;
+        }
+        s_request.last_source_generation = event->source_generation;
+        if (measure_svc_cal_capture_window_add(&s_request.window, event->raw_code)) {
+            if (measure_svc_cal_capture_window_is_stable(&s_request.window)) {
+                s_request.accepted_mean = measure_svc_cal_capture_window_mean(&s_request.window);
+                s_request.ready = true;
+                (void)xSemaphoreGive(s_capture_ready);
+            } else {
+                measure_svc_cal_capture_window_reset(&s_request.window);
+            }
         }
     }
     xSemaphoreGive(s_capture_lock);
@@ -172,6 +180,7 @@ esp_err_t measure_svc_calibration_capture_wait(
     s_request.active = true;
     s_request.ready = false;
     s_request.target = (measure_svc_cal_capture_target_t){channel, kind, physical_input};
+    s_request.last_source_generation = 0U;
     measure_svc_cal_capture_window_reset(&s_request.window);
     xSemaphoreGive(s_capture_lock);
 

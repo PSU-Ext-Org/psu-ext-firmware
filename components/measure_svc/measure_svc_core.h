@@ -34,8 +34,9 @@ esp_err_t measure_svc_core_get_physical_input(
 const measure_svc_config_t *measure_svc_core_get_config(void);
 /** @brief Report whether composition-root initialization has completed. */
 bool measure_svc_core_is_initialized(void);
-/** @brief Read one fresh provider sample in both raw-u4 and native-code domains. */
+/** @brief Read the latest provider sample and its unique conversion ID. */
 esp_err_t measure_svc_core_read_raw_sample(
-    measure_input_t input, measure_kind_t kind, uint32_t *value_u4, int16_t *raw_code);
+    measure_input_t input, measure_kind_t kind, uint32_t *value_u4, int16_t *raw_code,
+    uint32_t *source_generation);
 /** @brief Convert a signed native provider code to uncalibrated u4 once. */
 esp_err_t measure_svc_core_raw_code_to_u4(int16_t raw_code, uint32_t *value_u4);
