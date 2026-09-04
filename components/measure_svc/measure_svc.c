@@ -81,15 +81,18 @@ esp_err_t measure_svc_core_read_raw_sample(
     measure_kind_t kind,
     uint32_t *value_u4,
     int16_t *raw_code,
-    uint32_t *source_generation)
+    uint32_t *source_generation,
+    uint16_t *pga_full_scale_mv)
 {
-    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL)) {
+    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL) ||
+        (pga_full_scale_mv == NULL)) {
         return ESP_ERR_INVALID_ARG;
     }
     if ((s_provider == NULL) || (s_provider->read_raw_sample == NULL)) {
         return ESP_ERR_NOT_SUPPORTED;
     }
-    return s_provider->read_raw_sample(input, kind, value_u4, raw_code, source_generation);
+    return s_provider->read_raw_sample(
+        input, kind, value_u4, raw_code, source_generation, pga_full_scale_mv);
 }
 
 esp_err_t measure_svc_set_adc_data_rate_sps(uint16_t sps)
@@ -119,7 +122,10 @@ esp_err_t measure_svc_get_adc_data_rate_sps(uint16_t *sps)
     return measure_prov_ads1115_get_data_rate_sps(sps);
 }
 
-esp_err_t measure_svc_core_raw_code_to_u4(int16_t raw_code, uint32_t *value_u4)
+esp_err_t measure_svc_core_raw_code_to_u4(
+    int16_t raw_code,
+    uint16_t pga_full_scale_mv,
+    uint32_t *value_u4)
 {
     if (value_u4 == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -127,7 +133,7 @@ esp_err_t measure_svc_core_raw_code_to_u4(int16_t raw_code, uint32_t *value_u4)
     if ((s_provider == NULL) || (s_provider->raw_code_to_value_u4 == NULL)) {
         return ESP_ERR_NOT_SUPPORTED;
     }
-    *value_u4 = s_provider->raw_code_to_value_u4(raw_code);
+    *value_u4 = s_provider->raw_code_to_value_u4(raw_code, pga_full_scale_mv);
     return ESP_OK;
 }
 

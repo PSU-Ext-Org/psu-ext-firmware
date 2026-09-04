@@ -40,11 +40,17 @@ modules. Application components must not depend on them.
 ## Data flow
 
 The ADS1115 provider refreshes a three-input cache in a background single-shot
-scan. The sampler publishes the latest cached value independently at its
-configured rate:
+scan. The sampler polls that cache at its configured rate and publishes each
+ADC conversion once:
+
+Because every scan step changes the MUX and the divider has significant source
+impedance, acquisition discards conversions after selecting each input/PGA and
+caches the following conversion. It discards three conversions at +/-0.256 V
+and one at the other configured ranges. This prevents the preceding channel
+from biasing the published sample while the ADS1115 switched-capacitor input settles.
 
 ```text
-ADS1115 scan -> cache -> sampler -> active calibration -> sample event
+ADS1115 scan -> cache -> sampler -> active PGA calibration -> sample event
                                       |-> history -> averaged reads
                                       |-> power pairing -> power event/history
                                       |-> calibration capture (native raw code)
@@ -58,9 +64,10 @@ and derived output power.
 
 `MEASure:ADC:RATE <SPS>` selects the persistent ADS1115 conversion rate and
 `MEASure:ADC:RATE?` queries it. Supported values are 8, 16, 32, 64, 128, 250,
-475, and 860 SPS; the default is 128 SPS. The sampler continues publishing at
-100 Hz per channel, so cached ADC values repeat between background conversions.
-Calibration counts only unique ADC conversions.
+475, and 860 SPS; the default is 128 SPS. The sampler polls at 100 Hz per
+channel but suppresses repeated cache generations. History, averaging,
+calibration, and protection therefore consume each physical ADC conversion
+once rather than weighting cached duplicates according to their dwell time.
 
 The ADS conversion cache, averaging scratch window, SCPI history scratch
 buffers, and all measurement-history rings are allocated strictly in PSRAM.
@@ -112,10 +119,11 @@ Normal values use unsigned **u4 fixed point**: one physical unit is stored as
 10,000. For example, 2.0010 V is `20010` and 0.1250 A is `1250`.
 
 The sampler also retains the original signed ADS1115 conversion code in each
-raw event. Calibration capture averages these native codes before converting
-to u4, avoiding information loss from rounding every sample independently.
-Calibration interpolation and persisted tables remain in u4 for format
-compatibility.
+raw event. Calibration capture averages these native codes, and calibration
+interpolation stores and consumes the native code together with its PGA. Only
+the calibrated physical result is rounded to u4. This preserves the additional
+resolution of the lower PGA ranges instead of first quantizing the ADC-pin
+voltage to 0.1 mV.
 
 ## Modules
 
@@ -131,8 +139,7 @@ compatibility.
 - `measure_svc_calibration_table.c` validates and applies piecewise-linear
   interpolation and endpoint extrapolation.
 - `measure_svc_calibration_record.c` implements the stable persisted record.
-- `measure_svc_calibration_persistence.c` owns NVS keys, defaults, and legacy
-  two-point loading.
+- `measure_svc_calibration_persistence.c` owns NVS keys and per-PGA defaults.
 - `measure_prov_ads1115.c` implements production ADC acquisition.
 - `measure_prov_fake.c` supplies the test/diagnostic provider.
 
@@ -143,12 +150,16 @@ selected active table into staging. Point capture waits for events matching the
 exact logical channel, kind, and physical input. Each attempt discards two
 fresh samples, collects 16 signed ADC codes using a 64-bit sum, and accepts the
 window when its peak-to-peak spread is at most 16 codes. An unstable attempt
-starts again with a fresh discard phase. All attempts share a five-second
+starts again with a fresh discard phase. All attempts share a 30-second
 deadline.
 
-The accepted signed mean is rounded once, converted once to raw u4, and stored
-with the supplied reference u4 value. `COMMIT` validates the complete staging
-table, persists it, and only then publishes it as active. `ABORT` discards the
+The accepted signed mean is stored as a native code with the window's PGA and
+the supplied reference u4 value. It is converted to raw voltage only when a
+point is queried; the SCPI query prints that raw voltage with six decimals so
+signed near-zero offsets and lower-range ADC-code changes are visible. A PGA
+change during collection restarts the window. `COMMIT`
+requires at least two ordered points for every configured PGA, persists the
+complete table, and only then publishes it as active. `ABORT` discards the
 staging table. Capture generation checks prevent an aborted or replaced
 transaction from publishing a stale point.
 
@@ -161,9 +172,10 @@ connection is one way to synchronize.
 
 Voltage CH0, voltage CH1, and current CH1 use independent versioned NVS blobs.
 The record layout and NVS keys are compatibility-sensitive. Runtime lookup
-cache fields are never persisted. Missing or invalid records fall back
-independently to safe default two-point tables; recognized legacy two-point
-keys are still loaded without changing the current record format.
+cache fields are never persisted. Missing, invalid, old-format, or configured-
+range-incompatible records fall back independently to nominal two-point tables
+for every configured PGA. The range-aware format intentionally does not migrate
+legacy fixed-range records.
 
 ## Tests
 
@@ -172,7 +184,7 @@ transaction behavior, concurrency, and the native-code capture state machine.
 The Unity device image is successful when the menu command `*` reports:
 
 ```text
-16 Tests 0 Failures 0 Ignored
+18 Tests 0 Failures 0 Ignored
 ```
 
 Build the production firmware from the repository root in the configured

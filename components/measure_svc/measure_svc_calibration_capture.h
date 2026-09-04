@@ -55,8 +55,9 @@ esp_err_t measure_svc_calibration_capture_register_listener(void);
  * @param kind Measurement kind required in incoming events.
  * @param physical_input Physical input required in incoming events.
  * @param raw_code Accepted rounded native-code mean.
+ * @param pga_full_scale_mv PGA used for every sample in the accepted window.
  * @return `ESP_OK`, `ESP_ERR_TIMEOUT`, or a state/argument error.
  */
 esp_err_t measure_svc_calibration_capture_wait(
     measure_channel_t channel, measure_kind_t kind, measure_input_t physical_input,
-    int16_t *raw_code);
+    int16_t *raw_code, uint16_t *pga_full_scale_mv);

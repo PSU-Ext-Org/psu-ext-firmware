@@ -32,8 +32,9 @@ extern "C" {
 
 /** @brief One persistent interpolation knot in raw and physical u4 domains. */
 typedef struct {
-    uint32_t raw_u4; /**< Uncalibrated provider value multiplied by 10,000. */
+    int16_t raw_code; /**< Native signed ADS1115 conversion code. */
     uint32_t actual_u4; /**< Reference physical value multiplied by 10,000. */
+    uint16_t pga_full_scale_mv; /**< PGA full-scale magnitude in millivolts. */
 } measure_svc_cal_table_point_t;
 
 /** @brief Persistent calibration knots plus a non-persistent lookup hint. */
@@ -49,8 +50,9 @@ typedef struct {
 /**
  * @brief Validate the persistent contents of a calibration table.
  *
- * A valid table contains 2..8 points that are strictly increasing in both
- * raw and actual values.
+ * A valid table contains 2..32 points, at least two for every configured PGA.
+ * Points for each PGA are strictly increasing in both raw and actual values;
+ * points belonging to different PGAs may be interleaved.
  *
  * @param table Table whose persistent fields are checked.
  * @return `true` when the table can be used for interpolation.
@@ -64,20 +66,21 @@ bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table);
 void measure_svc_cal_table_invalidate_cache(measure_svc_cal_table_t *table);
 
 /**
- * @brief Apply a validated calibration table to one raw fixed-point value.
+ * @brief Apply the matching PGA subset of a validated calibration table.
  *
  * The function performs piecewise-linear interpolation or endpoint-segment
  * extrapolation, rounds half away from zero, and saturates to uint32_t. A
  * successful call may update the table's runtime segment cache.
  *
  * @param table Calibration table and runtime lookup cache.
- * @param raw_u4 Raw ADC-domain value scaled by 10,000.
+ * @param raw_code Native signed ADC conversion code.
  * @param actual_u4 Output receiving the calibrated value scaled by 10,000.
  * @return `true` on success, or `false` for a null/invalid table or output.
  */
 bool measure_svc_cal_table_apply_u4(
     measure_svc_cal_table_t *table,
-    uint32_t raw_u4,
+    int16_t raw_code,
+    uint16_t pga_full_scale_mv,
     uint32_t *actual_u4);
 
 #ifdef __cplusplus

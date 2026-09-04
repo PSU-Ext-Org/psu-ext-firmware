@@ -38,6 +38,8 @@ typedef struct {
     measure_svc_cal_capture_target_t target;
     measure_svc_cal_capture_window_t window;
     int16_t accepted_mean;
+    uint16_t accepted_pga_full_scale_mv;
+    uint16_t window_pga_full_scale_mv;
     uint32_t last_source_generation;
 } measure_svc_cal_capture_request_t;
 
@@ -134,9 +136,15 @@ static void capture_listener(const measure_svc_sample_event_t *event, void *cont
             return;
         }
         s_request.last_source_generation = event->source_generation;
+        if ((s_request.window_pga_full_scale_mv != 0U) &&
+            (event->pga_full_scale_mv != s_request.window_pga_full_scale_mv)) {
+            measure_svc_cal_capture_window_reset(&s_request.window);
+        }
+        s_request.window_pga_full_scale_mv = event->pga_full_scale_mv;
         if (measure_svc_cal_capture_window_add(&s_request.window, event->raw_code)) {
             if (measure_svc_cal_capture_window_is_stable(&s_request.window)) {
                 s_request.accepted_mean = measure_svc_cal_capture_window_mean(&s_request.window);
+                s_request.accepted_pga_full_scale_mv = s_request.window_pga_full_scale_mv;
                 s_request.ready = true;
                 (void)xSemaphoreGive(s_capture_ready);
             } else {
@@ -159,9 +167,11 @@ esp_err_t measure_svc_calibration_capture_wait(
     measure_channel_t channel,
     measure_kind_t kind,
     measure_input_t physical_input,
-    int16_t *raw_code)
+    int16_t *raw_code,
+    uint16_t *pga_full_scale_mv)
 {
-    if ((raw_code == NULL) || (kind == MEASURE_KIND_POWER) ||
+    if ((raw_code == NULL) || (pga_full_scale_mv == NULL) ||
+        (kind == MEASURE_KIND_POWER) ||
         (physical_input == MEASURE_INPUT_UNUSED)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -181,6 +191,7 @@ esp_err_t measure_svc_calibration_capture_wait(
     s_request.ready = false;
     s_request.target = (measure_svc_cal_capture_target_t){channel, kind, physical_input};
     s_request.last_source_generation = 0U;
+    s_request.window_pga_full_scale_mv = 0U;
     measure_svc_cal_capture_window_reset(&s_request.window);
     xSemaphoreGive(s_capture_lock);
 
@@ -201,6 +212,7 @@ esp_err_t measure_svc_calibration_capture_wait(
         return ESP_ERR_INVALID_STATE;
     }
     *raw_code = s_request.accepted_mean;
+    *pga_full_scale_mv = s_request.accepted_pga_full_scale_mv;
     s_request.active = false;
     s_request.ready = false;
     xSemaphoreGive(s_capture_lock);

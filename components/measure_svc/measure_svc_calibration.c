@@ -196,18 +196,20 @@ esp_err_t measure_svc_calibration_capture_point(
     xSemaphoreGive(s_calibration_lock);
 
     int16_t raw_code;
+    uint16_t pga_full_scale_mv;
     ESP_RETURN_ON_ERROR(
         measure_svc_calibration_capture_wait(
             channel,
             kind,
             physical_input,
-            &raw_code),
+            &raw_code,
+            &pga_full_scale_mv),
         TAG,
         "waiting for fresh calibration sample failed");
 
     uint32_t raw_u4;
     ESP_RETURN_ON_ERROR(
-        measure_svc_core_raw_code_to_u4(raw_code, &raw_u4),
+        measure_svc_core_raw_code_to_u4(raw_code, pga_full_scale_mv, &raw_u4),
         TAG,
         "converting fresh calibration sample failed");
 
@@ -226,13 +228,16 @@ esp_err_t measure_svc_calibration_capture_point(
     if (point_index == (uint8_t)(s_staging_table.count + 1U)) {
         s_staging_table.count = point_index;
     }
-    s_staging_table.points[point_index - 1U].raw_u4 = raw_u4;
+    s_staging_table.points[point_index - 1U].raw_code = raw_code;
     s_staging_table.points[point_index - 1U].actual_u4 = actual_u4;
+    s_staging_table.points[point_index - 1U].pga_full_scale_mv = pga_full_scale_mv;
     measure_svc_cal_table_invalidate_cache(&s_staging_table);
 
     if (stored_point != NULL) {
         stored_point->raw_voltage_u4 = raw_u4;
         stored_point->actual_voltage_u4 = actual_u4;
+        stored_point->pga_full_scale_mv = pga_full_scale_mv;
+        stored_point->raw_code = raw_code;
     }
     xSemaphoreGive(s_calibration_lock);
     return ESP_OK;
@@ -259,10 +264,13 @@ esp_err_t measure_svc_calibration_get_point(
         return ESP_ERR_INVALID_ARG;
     }
 
-    point->raw_voltage_u4 = table->points[point_index - 1U].raw_u4;
+    const int16_t raw_code = table->points[point_index - 1U].raw_code;
     point->actual_voltage_u4 = table->points[point_index - 1U].actual_u4;
+    point->pga_full_scale_mv = table->points[point_index - 1U].pga_full_scale_mv;
+    point->raw_code = raw_code;
     xSemaphoreGive(s_calibration_lock);
-    return ESP_OK;
+    return measure_svc_core_raw_code_to_u4(
+        raw_code, point->pga_full_scale_mv, &point->raw_voltage_u4);
 }
 
 esp_err_t measure_svc_calibration_clear(measure_kind_t kind, measure_channel_t channel)
@@ -356,9 +364,11 @@ esp_err_t measure_svc_calibration_commit(void)
 uint32_t measure_svc_calibration_apply_target_u4(
     measure_kind_t kind,
     measure_channel_t channel,
-    uint32_t raw_u4)
+    int16_t raw_code,
+    uint16_t pga_full_scale_mv)
 {
-    uint32_t actual_u4 = raw_u4;
+    uint32_t actual_u4 = 0U;
+    (void)measure_svc_core_raw_code_to_u4(raw_code, pga_full_scale_mv, &actual_u4);
     const cal_target_t *target = find_target(kind, channel);
     if (target == NULL) {
         return actual_u4;
@@ -366,7 +376,8 @@ uint32_t measure_svc_calibration_apply_target_u4(
     if (take_calibration_lock() != ESP_OK) {
         return actual_u4;
     }
-    (void)measure_svc_cal_table_apply_u4(target->active_table, raw_u4, &actual_u4);
+    (void)measure_svc_cal_table_apply_u4(
+        target->active_table, raw_code, pga_full_scale_mv, &actual_u4);
     xSemaphoreGive(s_calibration_lock);
     return actual_u4;
 }

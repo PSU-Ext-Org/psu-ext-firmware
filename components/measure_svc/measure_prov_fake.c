@@ -93,12 +93,14 @@ static esp_err_t measure_prov_fake_read_raw(
     return ESP_ERR_INVALID_ARG;
 }
 
-static uint32_t measure_prov_fake_raw_code_to_u4(int16_t raw_code)
+static uint32_t measure_prov_fake_raw_code_to_u4(
+    int16_t raw_code,
+    uint16_t pga_full_scale_mv)
 {
     if (raw_code <= 0) {
         return 0U;
     }
-    return (uint32_t)(((uint64_t)(uint16_t)raw_code * 20480U + 16383U) / 32767U);
+    return (uint32_t)(((uint64_t)(uint16_t)raw_code * pga_full_scale_mv * 10U + 16384U) / 32768U);
 }
 
 static esp_err_t measure_prov_fake_read_raw_sample(
@@ -106,17 +108,19 @@ static esp_err_t measure_prov_fake_read_raw_sample(
     measure_kind_t kind,
     uint32_t *value_u4,
     int16_t *raw_code,
-    uint32_t *source_generation)
+    uint32_t *source_generation,
+    uint16_t *pga_full_scale_mv)
 {
     static uint32_t generation;
-    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL)) {
+    if ((value_u4 == NULL) || (raw_code == NULL) || (source_generation == NULL) ||
+        (pga_full_scale_mv == NULL)) {
         return ESP_ERR_INVALID_ARG;
     }
     esp_err_t err = measure_prov_fake_read_raw(input, kind, value_u4);
     if (err != ESP_OK) {
         return err;
     }
-    uint32_t code = ((uint64_t)*value_u4 * 32767U + 10240U) / 20480U;
+    uint32_t code = ((uint64_t)*value_u4 * 32768U + 10240U) / 20480U;
     if (code > INT16_MAX) {
         code = INT16_MAX;
     }
@@ -126,6 +130,7 @@ static esp_err_t measure_prov_fake_read_raw_sample(
         ++generation;
     }
     *source_generation = generation;
+    *pga_full_scale_mv = 2048U;
     return ESP_OK;
 }
 

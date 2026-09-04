@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -158,18 +159,21 @@ static bool cal_parse_point_token(const char *text, uint8_t *point_index)
 
     strlcpy(upper, text, sizeof(upper));
     scpi_handler_uppercase(upper);
-    const size_t length = strlen(upper);
-    const char *digit = NULL;
-    if ((length == 6U) && (strncmp(upper, "POINT", 5U) == 0)) {
-        digit = &upper[5];
-    } else if ((length == 5U) && (strncmp(upper, "POIN", 4U) == 0)) {
-        digit = &upper[4];
+    const char *digits = NULL;
+    if (strncmp(upper, "POINT", 5U) == 0) {
+        digits = &upper[5];
+    } else if (strncmp(upper, "POIN", 4U) == 0) {
+        digits = &upper[4];
     }
-    if ((digit == NULL) || (*digit < '1') || (*digit > '8')) {
+    if ((digits == NULL) || (*digits < '0') || (*digits > '9')) {
         return false;
     }
-
-    *point_index = (uint8_t)(*digit - '0');
+    char *end = NULL;
+    const unsigned long parsed = strtoul(digits, &end, 10);
+    if ((*end != '\0') || (parsed == 0U) || (parsed > MEASURE_SVC_CAL_MAX_POINTS)) {
+        return false;
+    }
+    *point_index = (uint8_t)parsed;
     return true;
 }
 
@@ -223,14 +227,24 @@ static void cal_format_point(
     char *response,
     size_t response_size)
 {
+    int64_t raw_numerator =
+        (int64_t)point->raw_code * point->pga_full_scale_mv * 1000;
+    raw_numerator += raw_numerator >= 0 ? 16384 : -16384;
+    const int32_t raw_voltage_u6 = (int32_t)(raw_numerator / 32768);
+    const uint32_t raw_magnitude_u6 = raw_voltage_u6 < 0
+        ? (uint32_t)(-(int64_t)raw_voltage_u6)
+        : (uint32_t)raw_voltage_u6;
     snprintf(
         response,
         response_size,
-        "%" PRIu32 ".%04" PRIu32 ",%" PRIu32 ".%04" PRIu32,
-        point->raw_voltage_u4 / SCPI_HANDLER_VALUE_SCALE_U4,
-        point->raw_voltage_u4 % SCPI_HANDLER_VALUE_SCALE_U4,
+        "%s%" PRIu32 ".%06" PRIu32 ",%" PRIu32 ".%04" PRIu32 ",%u.%03u",
+        raw_voltage_u6 < 0 ? "-" : "",
+        raw_magnitude_u6 / 1000000U,
+        raw_magnitude_u6 % 1000000U,
         point->actual_voltage_u4 / SCPI_HANDLER_VALUE_SCALE_U4,
-        point->actual_voltage_u4 % SCPI_HANDLER_VALUE_SCALE_U4);
+        point->actual_voltage_u4 % SCPI_HANDLER_VALUE_SCALE_U4,
+        (unsigned)(point->pga_full_scale_mv / 1000U),
+        (unsigned)(point->pga_full_scale_mv % 1000U));
 }
 
 static bool cal_require_no_argument(
@@ -332,11 +346,11 @@ static void cal_handle_point(
             &actual_u4)) {
         write_response(kind == MEASURE_KIND_VOLTAGE ?
             (query ?
-                "ERR,\"Expected CALibration:VOLTage? CH0|CH1,POINt1|...|POINt8\"" :
-                "ERR,\"Expected CALibration:VOLTage CH0|CH1,POINt1|...|POINt8,<actual>\"") :
+                "ERR,\"Expected CALibration:VOLTage? CH0|CH1,POINt1|...|POINt32\"" :
+                "ERR,\"Expected CALibration:VOLTage CH0|CH1,POINt1|...|POINt32,<actual>\"") :
             (query ?
-                "ERR,\"Expected CALibration:CURRent? CH1,POINt1|...|POINt8\"" :
-                "ERR,\"Expected CALibration:CURRent CH1,POINt1|...|POINt8,<actual>\""));
+                "ERR,\"Expected CALibration:CURRent? CH1,POINt1|...|POINt32\"" :
+                "ERR,\"Expected CALibration:CURRent CH1,POINt1|...|POINt32,<actual>\""));
         return;
     }
     if (!cal_channel_supported(kind, channel)) {
@@ -357,7 +371,7 @@ static void cal_handle_point(
     }
 
     if (query) {
-        char response[32];
+        char response[48];
         cal_format_point(&point, response, sizeof(response));
         write_response(response);
     }

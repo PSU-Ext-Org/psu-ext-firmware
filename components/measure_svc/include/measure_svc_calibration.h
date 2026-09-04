@@ -30,12 +30,14 @@
 extern "C" {
 #endif
 
-#define MEASURE_SVC_CAL_MAX_POINTS 8U /**< Maximum points in one target table. */
+#define MEASURE_SVC_CAL_MAX_POINTS 32U /**< Maximum points across all PGA ranges. */
 
 /** @brief One raw-to-reference calibration point in u4 fixed point. */
 typedef struct {
     uint32_t raw_voltage_u4; /**< Uncalibrated ADC-domain value times 10,000. */
     uint32_t actual_voltage_u4; /**< Reference physical value times 10,000. */
+    uint16_t pga_full_scale_mv; /**< ADS1115 PGA full-scale magnitude in millivolts. */
+    int16_t raw_code; /**< Native signed ADS1115 code retained without voltage rounding. */
 } measure_svc_cal_point_t;
 
 /** @brief State of the single global calibration transaction. */
@@ -62,7 +64,7 @@ esp_err_t measure_svc_calibration_abort(void);
  * @brief Capture a stable fresh raw window and stage one reference point.
  * @param kind Voltage or current calibration target.
  * @param channel Logical target channel.
- * @param point_index One-based point index from 1 through 8.
+ * @param point_index One-based point index from 1 through 32.
  * @param actual_u4 Reference physical value multiplied by 10,000.
  * @param stored_point Optional output receiving the staged raw/reference pair.
  */

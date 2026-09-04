@@ -52,6 +52,7 @@ typedef struct {
     uint32_t raw_value_u4; /**< Uncalibrated provider value in u4. */
     int16_t raw_code; /**< Signed native ADC code before u4 conversion. */
     uint32_t source_generation; /**< Provider conversion ID; zero for derived values. */
+    uint16_t pga_full_scale_mv; /**< PGA full-scale magnitude used for the conversion. */
     uint32_t value_u4; /**< Calibrated or derived value in u4. */
 } measure_svc_sample_event_t;
 

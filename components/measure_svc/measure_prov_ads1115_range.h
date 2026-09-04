@@ -14,12 +14,19 @@
  * limitations under the License.
  */
 
-#include "measure_svc.h"
-#include "measure_svc_calibration.h"
-#include "measure_svc_samples.h"
-#include "unity.h"
+#pragma once
 
-TEST_CASE("calibration infrastructure smoke", "[calibration][smoke]")
-{
-    TEST_ASSERT_EQUAL_UINT32(32U, MEASURE_SVC_CAL_MAX_POINTS);
-}
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "esp_err.h"
+
+/** @brief Validate the compile-time ADS1115 autorange policy. */
+bool measure_prov_ads1115_range_config_validate(void);
+
+/** @brief Select at most one adjacent range from one ADC-side voltage sample. */
+esp_err_t measure_prov_ads1115_range_select(
+    uint8_t current_index, uint32_t adc_voltage_u4, uint8_t *next_index);
+
+/** @brief Return the conversions discarded before publishing at one PGA. */
+uint8_t measure_prov_ads1115_settling_conversions(uint16_t pga_full_scale_mv);

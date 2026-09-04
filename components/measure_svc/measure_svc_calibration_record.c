@@ -27,8 +27,8 @@
 #include "esp_rom_crc.h"
 
 enum {
-    CAL_RECORD_MAGIC = 0x314C4143U, /* Little-endian bytes "CAL1". */
-    CAL_RECORD_VERSION = 1U,
+    CAL_RECORD_MAGIC = 0x334C4143U, /* Little-endian bytes "CAL3". */
+    CAL_RECORD_VERSION = 3U,
     CAL_RECORD_MAGIC_OFFSET = 0U,
     CAL_RECORD_VERSION_OFFSET = 4U,
     CAL_RECORD_COUNT_OFFSET = 6U,
@@ -88,7 +88,8 @@ bool measure_svc_cal_record_encode(
     for (uint8_t index = 0U; index < table->count; ++index) {
         const size_t offset =
             CAL_RECORD_POINTS_OFFSET + ((size_t)index * CAL_RECORD_POINT_SIZE);
-        write_u32_le(&record[offset], table->points[index].raw_u4);
+        write_u16_le(&record[offset], (uint16_t)table->points[index].raw_code);
+        write_u16_le(&record[offset + 2U], table->points[index].pga_full_scale_mv);
         write_u32_le(&record[offset + 4U], table->points[index].actual_u4);
     }
 
@@ -125,7 +126,8 @@ bool measure_svc_cal_record_decode(
     for (uint8_t index = 0U; index < candidate.count; ++index) {
         const size_t offset =
             CAL_RECORD_POINTS_OFFSET + ((size_t)index * CAL_RECORD_POINT_SIZE);
-        candidate.points[index].raw_u4 = read_u32_le(&record[offset]);
+        candidate.points[index].raw_code = (int16_t)read_u16_le(&record[offset]);
+        candidate.points[index].pga_full_scale_mv = read_u16_le(&record[offset + 2U]);
         candidate.points[index].actual_u4 = read_u32_le(&record[offset + 4U]);
     }
 

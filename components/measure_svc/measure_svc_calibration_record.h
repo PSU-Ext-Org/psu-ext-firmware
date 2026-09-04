@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#define MEASURE_SVC_CAL_RECORD_SIZE 76U /**< Fixed encoded record length in bytes. */
+#define MEASURE_SVC_CAL_RECORD_SIZE 268U /**< Fixed encoded record length in bytes. */
 
 /**
  * @brief Encode a valid table into the versioned, checksummed wire format.

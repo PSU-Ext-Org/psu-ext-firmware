@@ -37,6 +37,7 @@ bool measure_svc_core_is_initialized(void);
 /** @brief Read the latest provider sample and its unique conversion ID. */
 esp_err_t measure_svc_core_read_raw_sample(
     measure_input_t input, measure_kind_t kind, uint32_t *value_u4, int16_t *raw_code,
-    uint32_t *source_generation);
+    uint32_t *source_generation, uint16_t *pga_full_scale_mv);
 /** @brief Convert a signed native provider code to uncalibrated u4 once. */
-esp_err_t measure_svc_core_raw_code_to_u4(int16_t raw_code, uint32_t *value_u4);
+esp_err_t measure_svc_core_raw_code_to_u4(
+    int16_t raw_code, uint16_t pga_full_scale_mv, uint32_t *value_u4);

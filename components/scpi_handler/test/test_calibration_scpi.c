@@ -83,6 +83,19 @@ TEST_CASE("calibration scpi reports transaction states and malformed commands", 
     TEST_ASSERT_TRUE(s_saw_response);
     TEST_ASSERT_EQUAL_STRING("IDLE", s_last_response);
 
+    char point_query[] = "CALibration:VOLTage? CH0,POINt1";
+    run_scpi(point_query);
+    TEST_ASSERT_EQUAL_STRING("0.000000,0.0000,0.256", s_last_response);
+
+    char valid_max_index[] = "CALibration:VOLTage? CH0,POINt32";
+    run_scpi(valid_max_index);
+    TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
+    TEST_ASSERT_NULL(strstr(s_last_response, "Expected"));
+
+    char invalid_index[] = "CALibration:VOLTage? CH0,POINt33";
+    run_scpi(invalid_index);
+    TEST_ASSERT_NOT_NULL(strstr(s_last_response, "Expected"));
+
     char start[] = "CALibration:STARt VOLTage,CH0";
     run_scpi(start);
     TEST_ASSERT_FALSE(s_saw_response);

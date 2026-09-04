@@ -33,4 +33,5 @@ esp_err_t measure_svc_calibration_init(void);
  * @return Calibrated u4 value, or the raw input if the target cannot be applied.
  */
 uint32_t measure_svc_calibration_apply_target_u4(
-    measure_kind_t kind, measure_channel_t channel, uint32_t raw_u4);
+    measure_kind_t kind, measure_channel_t channel, int16_t raw_code,
+    uint16_t pga_full_scale_mv);
