@@ -145,20 +145,22 @@ voltage to 0.1 mV.
 
 ## Calibration capture
 
-Only one calibration transaction can be open at a time. `START` copies the
-selected active table into staging. Point capture waits for events matching the
+Only one calibration transaction can be open at a time. `START` creates an
+empty replacement staging table. Point capture waits for events matching the
 exact logical channel, kind, and physical input. Each attempt discards two
-fresh samples, collects 16 signed ADC codes using a 64-bit sum, and accepts the
+fresh samples, collects the target quantity's configured 1--100 averaging
+count of signed ADC codes using a 64-bit sum, and accepts the
 window when its peak-to-peak spread is at most 16 codes. An unstable attempt
 starts again with a fresh discard phase. All attempts share a 30-second
 deadline.
 
-The accepted signed mean is stored as a native code with the window's PGA and
+The accepted signed mean is stored as a Q16.16 native-code coordinate with the window's PGA and
 the supplied reference u4 value. It is converted to raw voltage only when a
 point is queried; the SCPI query prints that raw voltage with six decimals so
 signed near-zero offsets and lower-range ADC-code changes are visible. A PGA
-change during collection restarts the window. `COMMIT`
-requires at least two ordered points for every configured PGA, persists the
+change during collection restarts the window. `COMMIT` requires the configured
+minimum number of ordered points for every PGA when that validation is enabled,
+set in `menuconfig` under `PSU-EXT configuration` > `Calibration`, persists the
 complete table, and only then publishes it as active. `ABORT` discards the
 staging table. Capture generation checks prevent an aborted or replaced
 transaction from publishing a stale point.
@@ -171,6 +173,8 @@ connection is one way to synchronize.
 ## Persistence
 
 Voltage CH0, voltage CH1, and current CH1 use independent versioned NVS blobs.
+New commits use the `CAL4` version-4 encoding; valid `CAL3` records are loaded
+by converting their integer coordinates exactly to Q16.16 without rewriting flash.
 The record layout and NVS keys are compatibility-sensitive. Runtime lookup
 cache fields are never persisted. Missing, invalid, old-format, or configured-
 range-incompatible records fall back independently to nominal two-point tables

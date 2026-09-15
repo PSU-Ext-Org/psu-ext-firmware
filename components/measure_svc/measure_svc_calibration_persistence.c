@@ -101,12 +101,12 @@ static void set_default(const cal_storage_target_t *target, measure_svc_cal_tabl
         const uint32_t actual_denominator =
             32768U * target->default_slope_denominator;
         table->points[table->count++] = (measure_svc_cal_table_point_t){
-            .raw_code = 0,
+            .raw_code_q16 = 0,
             .actual_u4 = 0U,
             .pga_full_scale_mv = pgas[range],
         };
         table->points[table->count++] = (measure_svc_cal_table_point_t){
-            .raw_code = INT16_MAX,
+            .raw_code_q16 = INT16_MAX * 65536,
             .actual_u4 = (uint32_t)((actual_numerator + (actual_denominator / 2U)) /
                 actual_denominator),
             .pga_full_scale_mv = pgas[range],
@@ -134,12 +134,19 @@ esp_err_t measure_svc_cal_persistence_load(
     }
     ESP_RETURN_ON_ERROR(err, TAG, "nvs_open failed");
 
-    uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE];
-    size_t record_size = sizeof(record);
-    err = nvs_get_blob(handle, target->blob_key, record, &record_size);
+    size_t record_size = 0U;
+    err = nvs_get_blob(handle, target->blob_key, NULL, &record_size);
     if (err == ESP_OK) {
+        if ((record_size != MEASURE_SVC_CAL_RECORD_SIZE) &&
+            (record_size != MEASURE_SVC_CAL_RECORD_V3_SIZE)) {
+            nvs_close(handle);
+            ESP_LOGW(TAG, "invalid %s calibration blob; using default", target->name);
+            return ESP_OK;
+        }
+        uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE];
+        err = nvs_get_blob(handle, target->blob_key, record, &record_size);
         nvs_close(handle);
-        if ((record_size != sizeof(record)) || !measure_svc_cal_record_decode(record, table)) {
+        if ((err != ESP_OK) || !measure_svc_cal_record_decode_sized(record, record_size, table)) {
             ESP_LOGW(TAG, "invalid %s calibration blob; using default", target->name);
             set_default(target, table);
         }

@@ -25,6 +25,7 @@
 #include "measure_svc_calibration_runtime.h"
 #include "measure_svc_calibration_table.h"
 #include "measure_svc_core.h"
+#include "measure_svc_samples.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -116,8 +117,7 @@ esp_err_t measure_svc_calibration_start(measure_kind_t kind, measure_channel_t c
         return ESP_ERR_INVALID_STATE;
     }
 
-    s_staging_table = *target->active_table;
-    measure_svc_cal_table_invalidate_cache(&s_staging_table);
+    memset(&s_staging_table, 0, sizeof(s_staging_table));
     s_transaction_target = target;
     s_transaction_state = MEASURE_SVC_CAL_TRANSACTION_OPEN;
     ++s_transaction_generation;
@@ -195,23 +195,32 @@ esp_err_t measure_svc_calibration_capture_point(
     const uint32_t generation = s_transaction_generation;
     xSemaphoreGive(s_calibration_lock);
 
-    int16_t raw_code;
+    uint32_t average_count;
+    ESP_RETURN_ON_ERROR(measure_svc_get_average_count(kind, &average_count), TAG,
+        "reading calibration average count failed");
+    if ((average_count < MEASURE_SVC_MIN_AVERAGE_COUNT) ||
+        (average_count > MEASURE_SVC_MAX_AVERAGE_COUNT)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    int32_t raw_code_q16;
     uint16_t pga_full_scale_mv;
     ESP_RETURN_ON_ERROR(
         measure_svc_calibration_capture_wait(
             channel,
             kind,
             physical_input,
-            &raw_code,
+            (uint8_t)average_count,
+            &raw_code_q16,
             &pga_full_scale_mv),
         TAG,
         "waiting for fresh calibration sample failed");
 
-    uint32_t raw_u4;
-    ESP_RETURN_ON_ERROR(
-        measure_svc_core_raw_code_to_u4(raw_code, pga_full_scale_mv, &raw_u4),
-        TAG,
-        "converting fresh calibration sample failed");
+    const int64_t raw_uv_numerator = (int64_t)raw_code_q16 * pga_full_scale_mv * 1000LL;
+    const int64_t raw_uv_denominator = 65536LL * 32768LL;
+    const int64_t raw_uv = raw_uv_numerator >= 0 ?
+        (raw_uv_numerator + raw_uv_denominator / 2LL) / raw_uv_denominator :
+        (raw_uv_numerator - raw_uv_denominator / 2LL) / raw_uv_denominator;
+    const uint32_t raw_u4 = raw_uv <= 0 ? 0U : (uint32_t)((raw_uv + 50LL) / 100LL);
 
     ESP_RETURN_ON_ERROR(take_calibration_lock(), TAG, "taking calibration lock failed");
     if ((s_transaction_state != MEASURE_SVC_CAL_TRANSACTION_OPEN) ||
@@ -228,7 +237,7 @@ esp_err_t measure_svc_calibration_capture_point(
     if (point_index == (uint8_t)(s_staging_table.count + 1U)) {
         s_staging_table.count = point_index;
     }
-    s_staging_table.points[point_index - 1U].raw_code = raw_code;
+    s_staging_table.points[point_index - 1U].raw_code_q16 = raw_code_q16;
     s_staging_table.points[point_index - 1U].actual_u4 = actual_u4;
     s_staging_table.points[point_index - 1U].pga_full_scale_mv = pga_full_scale_mv;
     measure_svc_cal_table_invalidate_cache(&s_staging_table);
@@ -237,7 +246,9 @@ esp_err_t measure_svc_calibration_capture_point(
         stored_point->raw_voltage_u4 = raw_u4;
         stored_point->actual_voltage_u4 = actual_u4;
         stored_point->pga_full_scale_mv = pga_full_scale_mv;
-        stored_point->raw_code = raw_code;
+        stored_point->raw_code_q16 = raw_code_q16;
+        stored_point->raw_code = (int16_t)(raw_code_q16 >= 0 ?
+            (raw_code_q16 + 32768) / 65536 : (raw_code_q16 - 32768) / 65536);
     }
     xSemaphoreGive(s_calibration_lock);
     return ESP_OK;
@@ -264,13 +275,15 @@ esp_err_t measure_svc_calibration_get_point(
         return ESP_ERR_INVALID_ARG;
     }
 
-    const int16_t raw_code = table->points[point_index - 1U].raw_code;
+    const int32_t raw_code_q16 = table->points[point_index - 1U].raw_code_q16;
     point->actual_voltage_u4 = table->points[point_index - 1U].actual_u4;
     point->pga_full_scale_mv = table->points[point_index - 1U].pga_full_scale_mv;
-    point->raw_code = raw_code;
+    point->raw_code_q16 = raw_code_q16;
+    point->raw_code = (int16_t)(raw_code_q16 >= 0 ?
+        (raw_code_q16 + 32768) / 65536 : (raw_code_q16 - 32768) / 65536);
     xSemaphoreGive(s_calibration_lock);
     return measure_svc_core_raw_code_to_u4(
-        raw_code, point->pga_full_scale_mv, &point->raw_voltage_u4);
+        point->raw_code, point->pga_full_scale_mv, &point->raw_voltage_u4);
 }
 
 esp_err_t measure_svc_calibration_clear(measure_kind_t kind, measure_channel_t channel)

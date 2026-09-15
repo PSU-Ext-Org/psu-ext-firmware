@@ -1,141 +1,52 @@
-/*
- * Copyright 2026 PSU-EXT Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * @file measure_svc_calibration_record.c
- * @brief Stable byte encoding for persisted calibration tables.
- */
-
+/* Copyright 2026 PSU-EXT Authors
+ * Licensed under the Apache License, Version 2.0. */
 #include "measure_svc_calibration_record.h"
 
-#include <stddef.h>
 #include <string.h>
-
 #include "esp_rom_crc.h"
 
-enum {
-    CAL_RECORD_MAGIC = 0x334C4143U, /* Little-endian bytes "CAL3". */
-    CAL_RECORD_VERSION = 3U,
-    CAL_RECORD_MAGIC_OFFSET = 0U,
-    CAL_RECORD_VERSION_OFFSET = 4U,
-    CAL_RECORD_COUNT_OFFSET = 6U,
-    CAL_RECORD_RESERVED_OFFSET = 7U,
-    CAL_RECORD_POINTS_OFFSET = 8U,
-    CAL_RECORD_POINT_SIZE = 8U,
-    CAL_RECORD_CRC_OFFSET =
-        CAL_RECORD_POINTS_OFFSET +
-        (MEASURE_SVC_CAL_MAX_POINTS * CAL_RECORD_POINT_SIZE),
-};
+enum { HEADER_SIZE = 8U, V3_POINT_SIZE = 8U, V4_POINT_SIZE = 12U };
+static void put16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8U); }
+static void put32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8U); p[2] = (uint8_t)(v >> 16U); p[3] = (uint8_t)(v >> 24U); }
+static uint16_t get16(const uint8_t *p) { return (uint16_t)p[0] | ((uint16_t)p[1] << 8U); }
+static uint32_t get32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) | ((uint32_t)p[2] << 16U) | ((uint32_t)p[3] << 24U); }
 
-static void write_u16_le(uint8_t *destination, uint16_t value)
+bool measure_svc_cal_record_encode(const measure_svc_cal_table_t *table, uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE])
 {
-    destination[0] = (uint8_t)value;
-    destination[1] = (uint8_t)(value >> 8U);
-}
-
-static void write_u32_le(uint8_t *destination, uint32_t value)
-{
-    destination[0] = (uint8_t)value;
-    destination[1] = (uint8_t)(value >> 8U);
-    destination[2] = (uint8_t)(value >> 16U);
-    destination[3] = (uint8_t)(value >> 24U);
-}
-
-static uint16_t read_u16_le(const uint8_t *source)
-{
-    return (uint16_t)source[0] | ((uint16_t)source[1] << 8U);
-}
-
-static uint32_t read_u32_le(const uint8_t *source)
-{
-    return (uint32_t)source[0] |
-        ((uint32_t)source[1] << 8U) |
-        ((uint32_t)source[2] << 16U) |
-        ((uint32_t)source[3] << 24U);
-}
-
-static uint32_t record_crc(const uint8_t *record)
-{
-    return esp_rom_crc32_le(0U, record, CAL_RECORD_CRC_OFFSET);
-}
-
-bool measure_svc_cal_record_encode(
-    const measure_svc_cal_table_t *table,
-    uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE])
-{
-    if ((record == NULL) || !measure_svc_cal_table_validate(table)) {
-        return false;
-    }
-
+    if ((record == NULL) || !measure_svc_cal_table_validate(table)) return false;
     memset(record, 0, MEASURE_SVC_CAL_RECORD_SIZE);
-    write_u32_le(&record[CAL_RECORD_MAGIC_OFFSET], CAL_RECORD_MAGIC);
-    write_u16_le(&record[CAL_RECORD_VERSION_OFFSET], CAL_RECORD_VERSION);
-    record[CAL_RECORD_COUNT_OFFSET] = table->count;
-
-    for (uint8_t index = 0U; index < table->count; ++index) {
-        const size_t offset =
-            CAL_RECORD_POINTS_OFFSET + ((size_t)index * CAL_RECORD_POINT_SIZE);
-        write_u16_le(&record[offset], (uint16_t)table->points[index].raw_code);
-        write_u16_le(&record[offset + 2U], table->points[index].pga_full_scale_mv);
-        write_u32_le(&record[offset + 4U], table->points[index].actual_u4);
+    put32(record, 0x344C4143U); /* CAL4 */ put16(record + 4U, 4U); record[6] = table->count;
+    for (uint8_t i = 0U; i < table->count; ++i) {
+        uint8_t *p = record + HEADER_SIZE + (size_t)i * V4_POINT_SIZE;
+        put32(p, (uint32_t)table->points[i].raw_code_q16);
+        put16(p + 4U, table->points[i].pga_full_scale_mv);
+        put32(p + 8U, table->points[i].actual_u4);
     }
-
-    write_u32_le(&record[CAL_RECORD_CRC_OFFSET], record_crc(record));
+    put32(record + MEASURE_SVC_CAL_RECORD_SIZE - 4U, esp_rom_crc32_le(0U, record, MEASURE_SVC_CAL_RECORD_SIZE - 4U));
     return true;
 }
 
-bool measure_svc_cal_record_decode(
-    const uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE],
-    measure_svc_cal_table_t *table)
+bool measure_svc_cal_record_decode_sized(const uint8_t *record, size_t size, measure_svc_cal_table_t *table)
 {
-    if ((record == NULL) || (table == NULL) ||
-        (read_u32_le(&record[CAL_RECORD_MAGIC_OFFSET]) != CAL_RECORD_MAGIC) ||
-        (read_u16_le(&record[CAL_RECORD_VERSION_OFFSET]) != CAL_RECORD_VERSION) ||
-        (record[CAL_RECORD_RESERVED_OFFSET] != 0U) ||
-        (read_u32_le(&record[CAL_RECORD_CRC_OFFSET]) != record_crc(record))) {
-        return false;
+    if ((record == NULL) || (table == NULL) || (size < HEADER_SIZE + 4U) || (record[7] != 0U) ||
+        (get32(record + size - 4U) != esp_rom_crc32_le(0U, record, size - 4U))) return false;
+    const bool v4 = (get32(record) == 0x344C4143U) && (get16(record + 4U) == 4U) && (size == MEASURE_SVC_CAL_RECORD_SIZE);
+    const bool v3 = (get32(record) == 0x334C4143U) && (get16(record + 4U) == 3U) && (size == MEASURE_SVC_CAL_RECORD_V3_SIZE);
+    if (!v3 && !v4) return false;
+    measure_svc_cal_table_t candidate = {0}; candidate.count = record[6];
+    if (candidate.count > MEASURE_SVC_CAL_MAX_POINTS) return false;
+    const size_t point_size = v4 ? V4_POINT_SIZE : V3_POINT_SIZE;
+    for (size_t i = HEADER_SIZE + (size_t)candidate.count * point_size; i < size - 4U; ++i) if (record[i] != 0U) return false;
+    for (uint8_t i = 0U; i < candidate.count; ++i) {
+        const uint8_t *p = record + HEADER_SIZE + (size_t)i * point_size;
+        if (v4 && get16(p + 6U) != 0U) return false;
+        candidate.points[i].raw_code_q16 = v4 ? (int32_t)get32(p) : (int32_t)(int16_t)get16(p) * 65536;
+        candidate.points[i].pga_full_scale_mv = get16(p + (v4 ? 4U : 2U));
+        candidate.points[i].actual_u4 = get32(p + (v4 ? 8U : 4U));
     }
-
-    measure_svc_cal_table_t candidate = {0};
-    candidate.count = record[CAL_RECORD_COUNT_OFFSET];
-    if (candidate.count > MEASURE_SVC_CAL_MAX_POINTS) {
-        return false;
-    }
-
-    const size_t unused_offset =
-        CAL_RECORD_POINTS_OFFSET + ((size_t)candidate.count * CAL_RECORD_POINT_SIZE);
-    for (size_t offset = unused_offset; offset < CAL_RECORD_CRC_OFFSET; ++offset) {
-        if (record[offset] != 0U) {
-            return false;
-        }
-    }
-
-    for (uint8_t index = 0U; index < candidate.count; ++index) {
-        const size_t offset =
-            CAL_RECORD_POINTS_OFFSET + ((size_t)index * CAL_RECORD_POINT_SIZE);
-        candidate.points[index].raw_code = (int16_t)read_u16_le(&record[offset]);
-        candidate.points[index].pga_full_scale_mv = read_u16_le(&record[offset + 2U]);
-        candidate.points[index].actual_u4 = read_u32_le(&record[offset + 4U]);
-    }
-
-    if (!measure_svc_cal_table_validate(&candidate)) {
-        return false;
-    }
-
-    measure_svc_cal_table_invalidate_cache(&candidate);
-    *table = candidate;
-    return true;
+    if (!measure_svc_cal_table_validate(&candidate)) return false;
+    measure_svc_cal_table_invalidate_cache(&candidate); *table = candidate; return true;
 }
+
+bool measure_svc_cal_record_decode(const uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE], measure_svc_cal_table_t *table)
+{ return measure_svc_cal_record_decode_sized(record, MEASURE_SVC_CAL_RECORD_SIZE, table); }

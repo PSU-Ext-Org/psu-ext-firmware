@@ -24,6 +24,7 @@
 #include <limits.h>
 #include <stddef.h>
 
+#include "sdkconfig.h"
 #include "measure_provider.h"
 
 bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table)
@@ -58,16 +59,18 @@ bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table)
                 continue;
             }
             if ((previous != NULL) &&
-                ((current->raw_code <= previous->raw_code) ||
+                ((current->raw_code_q16 <= previous->raw_code_q16) ||
                  (current->actual_u4 <= previous->actual_u4))) {
                 return false;
             }
             previous = current;
             ++points_in_range;
         }
-        if (points_in_range < 2U) {
+#if CONFIG_PSUEXT_CAL_REQUIRE_MIN_POINTS_PER_PGA
+        if (points_in_range < CONFIG_PSUEXT_CAL_MIN_POINTS_PER_PGA) {
             return false;
         }
+#endif
     }
 
     return true;
@@ -99,7 +102,7 @@ static bool measure_svc_cal_table_find_segment(
             previous = index;
             continue;
         }
-        if (raw_code <= table->points[index].raw_code) {
+        if ((int32_t)raw_code * 65536 <= table->points[index].raw_code_q16) {
             *first_index = previous;
             *second_index = index;
             table->cached_segment = previous;
@@ -116,24 +119,6 @@ static bool measure_svc_cal_table_find_segment(
         return true;
     }
     return false;
-}
-
-static int64_t measure_svc_cal_table_round_div_signed(
-    int64_t numerator,
-    int64_t positive_denominator)
-{
-    int64_t quotient = numerator / positive_denominator;
-    const int64_t remainder = numerator % positive_denominator;
-    const int64_t half_threshold =
-        (positive_denominator / 2) + (positive_denominator % 2);
-
-    if (remainder >= half_threshold) {
-        ++quotient;
-    } else if (remainder <= -half_threshold) {
-        --quotient;
-    }
-
-    return quotient;
 }
 
 bool measure_svc_cal_table_apply_u4(
@@ -155,31 +140,37 @@ bool measure_svc_cal_table_apply_u4(
     const measure_svc_cal_table_point_t *point0 = &table->points[first];
     const measure_svc_cal_table_point_t *point1 = &table->points[second];
 
-    if (raw_code == point0->raw_code) {
+    const int64_t x = (int64_t)raw_code * 65536LL;
+    if (x == point0->raw_code_q16) {
         *actual_u4 = point0->actual_u4;
         return true;
     }
-    if (raw_code == point1->raw_code) {
+    if (x == point1->raw_code_q16) {
         *actual_u4 = point1->actual_u4;
         return true;
     }
 
-    const int64_t raw_span = (int64_t)point1->raw_code - (int64_t)point0->raw_code;
+    const int64_t raw_span = (int64_t)point1->raw_code_q16 - (int64_t)point0->raw_code_q16;
     const int64_t actual_span = (int64_t)point1->actual_u4 - (int64_t)point0->actual_u4;
-    const int64_t raw_delta = (int64_t)raw_code - (int64_t)point0->raw_code;
-    /* A signed ADS1115-code delta is at most 65535, so this product fits int64_t. */
-    const int64_t correction = measure_svc_cal_table_round_div_signed(
-        raw_delta * actual_span,
-        raw_span);
-    if (correction < 0) {
-        const uint64_t magnitude = (uint64_t)(-correction);
+    const int64_t raw_delta = x - (int64_t)point0->raw_code_q16;
+    /* The two factors are bounded below 2^32.  Divide first and retain the
+     * remainder, so no intermediate needs wider-than-64-bit arithmetic. */
+    const uint64_t delta_magnitude = raw_delta < 0 ? (uint64_t)-raw_delta : (uint64_t)raw_delta;
+    const uint64_t actual_magnitude = actual_span < 0 ? (uint64_t)-actual_span : (uint64_t)actual_span;
+    const uint64_t denominator = (uint64_t)raw_span;
+    const uint64_t whole = delta_magnitude / denominator;
+    const uint64_t remainder = delta_magnitude % denominator;
+    const uint64_t fractional = (remainder * actual_magnitude + denominator / 2U) / denominator;
+    const uint64_t magnitude = whole * actual_magnitude + fractional;
+    const bool negative = (raw_delta < 0) != (actual_span < 0);
+    if (negative) {
         *actual_u4 = magnitude >= point0->actual_u4 ?
             0U :
             point0->actual_u4 - (uint32_t)magnitude;
-    } else if ((uint64_t)correction > (uint64_t)UINT32_MAX - point0->actual_u4) {
+    } else if (magnitude > (uint64_t)UINT32_MAX - point0->actual_u4) {
         *actual_u4 = UINT32_MAX;
     } else {
-        *actual_u4 = point0->actual_u4 + (uint32_t)correction;
+        *actual_u4 = point0->actual_u4 + (uint32_t)magnitude;
     }
 
     return true;

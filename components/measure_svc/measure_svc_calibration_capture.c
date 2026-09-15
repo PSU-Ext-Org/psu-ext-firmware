@@ -37,7 +37,7 @@ typedef struct {
     bool ready;
     measure_svc_cal_capture_target_t target;
     measure_svc_cal_capture_window_t window;
-    int16_t accepted_mean;
+    int32_t accepted_mean_q16;
     uint16_t accepted_pga_full_scale_mv;
     uint16_t window_pga_full_scale_mv;
     uint32_t last_source_generation;
@@ -47,7 +47,7 @@ static SemaphoreHandle_t s_capture_lock;
 static SemaphoreHandle_t s_capture_ready;
 static measure_svc_cal_capture_request_t s_request;
 
-void measure_svc_cal_capture_window_reset(measure_svc_cal_capture_window_t *window)
+void measure_svc_cal_capture_window_reset(measure_svc_cal_capture_window_t *window, uint8_t requested_count)
 {
     if (window == NULL) {
         return;
@@ -56,6 +56,7 @@ void measure_svc_cal_capture_window_reset(measure_svc_cal_capture_window_t *wind
         .discard_remaining = MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES,
         .code_min = INT16_MAX,
         .code_max = INT16_MIN,
+        .requested_count = requested_count,
     };
 }
 
@@ -68,7 +69,7 @@ bool measure_svc_cal_capture_window_add(measure_svc_cal_capture_window_t *window
         --window->discard_remaining;
         return false;
     }
-    if (window->sample_count >= MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES) {
+    if (window->sample_count >= window->requested_count) {
         return true;
     }
     if (raw_code < window->code_min) {
@@ -79,26 +80,27 @@ bool measure_svc_cal_capture_window_add(measure_svc_cal_capture_window_t *window
     }
     window->code_sum += raw_code;
     ++window->sample_count;
-    return window->sample_count == MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES;
+    return window->sample_count == window->requested_count;
 }
 
 bool measure_svc_cal_capture_window_is_stable(const measure_svc_cal_capture_window_t *window)
 {
     return (window != NULL) &&
-        (window->sample_count == MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES) &&
+        (window->sample_count == window->requested_count) &&
         (((int32_t)window->code_max - (int32_t)window->code_min) <=
             MEASURE_SVC_CAL_STABILITY_P2P_MAX_CODES);
 }
 
-int16_t measure_svc_cal_capture_window_mean(const measure_svc_cal_capture_window_t *window)
+int32_t measure_svc_cal_capture_window_mean_q16(const measure_svc_cal_capture_window_t *window)
 {
     if ((window == NULL) || (window->sample_count == 0U)) {
         return 0;
     }
-    const int64_t half = (int64_t)(window->sample_count / 2U);
-    return window->code_sum >= 0
-        ? (int16_t)((window->code_sum + half) / window->sample_count)
-        : (int16_t)((window->code_sum - half) / window->sample_count);
+    const int64_t numerator = window->code_sum * 65536LL;
+    const int64_t denominator = window->sample_count;
+    const int64_t half = denominator / 2LL + denominator % 2LL;
+    return (int32_t)(numerator >= 0 ? (numerator + half) / denominator :
+        (numerator - half) / denominator);
 }
 
 esp_err_t measure_svc_calibration_capture_init(void)
@@ -138,17 +140,17 @@ static void capture_listener(const measure_svc_sample_event_t *event, void *cont
         s_request.last_source_generation = event->source_generation;
         if ((s_request.window_pga_full_scale_mv != 0U) &&
             (event->pga_full_scale_mv != s_request.window_pga_full_scale_mv)) {
-            measure_svc_cal_capture_window_reset(&s_request.window);
+            measure_svc_cal_capture_window_reset(&s_request.window, s_request.window.requested_count);
         }
         s_request.window_pga_full_scale_mv = event->pga_full_scale_mv;
         if (measure_svc_cal_capture_window_add(&s_request.window, event->raw_code)) {
             if (measure_svc_cal_capture_window_is_stable(&s_request.window)) {
-                s_request.accepted_mean = measure_svc_cal_capture_window_mean(&s_request.window);
+                s_request.accepted_mean_q16 = measure_svc_cal_capture_window_mean_q16(&s_request.window);
                 s_request.accepted_pga_full_scale_mv = s_request.window_pga_full_scale_mv;
                 s_request.ready = true;
                 (void)xSemaphoreGive(s_capture_ready);
             } else {
-                measure_svc_cal_capture_window_reset(&s_request.window);
+                measure_svc_cal_capture_window_reset(&s_request.window, s_request.window.requested_count);
             }
         }
     }
@@ -167,10 +169,12 @@ esp_err_t measure_svc_calibration_capture_wait(
     measure_channel_t channel,
     measure_kind_t kind,
     measure_input_t physical_input,
-    int16_t *raw_code,
+    uint8_t sample_count,
+    int32_t *raw_code_q16,
     uint16_t *pga_full_scale_mv)
 {
-    if ((raw_code == NULL) || (pga_full_scale_mv == NULL) ||
+    if ((raw_code_q16 == NULL) || (pga_full_scale_mv == NULL) ||
+        (sample_count < 1U) || (sample_count > MEASURE_SVC_MAX_AVERAGE_COUNT) ||
         (kind == MEASURE_KIND_POWER) ||
         (physical_input == MEASURE_INPUT_UNUSED)) {
         return ESP_ERR_INVALID_ARG;
@@ -192,7 +196,7 @@ esp_err_t measure_svc_calibration_capture_wait(
     s_request.target = (measure_svc_cal_capture_target_t){channel, kind, physical_input};
     s_request.last_source_generation = 0U;
     s_request.window_pga_full_scale_mv = 0U;
-    measure_svc_cal_capture_window_reset(&s_request.window);
+    measure_svc_cal_capture_window_reset(&s_request.window, sample_count);
     xSemaphoreGive(s_capture_lock);
 
     if (xSemaphoreTake(s_capture_ready, MEASURE_SVC_CAL_CAPTURE_TIMEOUT_TICKS) != pdTRUE) {
@@ -211,7 +215,7 @@ esp_err_t measure_svc_calibration_capture_wait(
         xSemaphoreGive(s_capture_lock);
         return ESP_ERR_INVALID_STATE;
     }
-    *raw_code = s_request.accepted_mean;
+    *raw_code_q16 = s_request.accepted_mean_q16;
     *pga_full_scale_mv = s_request.accepted_pga_full_scale_mv;
     s_request.active = false;
     s_request.ready = false;

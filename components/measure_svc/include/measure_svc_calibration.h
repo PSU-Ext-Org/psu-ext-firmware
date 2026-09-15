@@ -38,6 +38,7 @@ typedef struct {
     uint32_t actual_voltage_u4; /**< Reference physical value times 10,000. */
     uint16_t pga_full_scale_mv; /**< ADS1115 PGA full-scale magnitude in millivolts. */
     int16_t raw_code; /**< Native signed ADS1115 code retained without voltage rounding. */
+    int32_t raw_code_q16; /**< Native signed ADS1115 coordinate in Q16.16. */
 } measure_svc_cal_point_t;
 
 /** @brief State of the single global calibration transaction. */
@@ -54,7 +55,7 @@ typedef struct {
     measure_channel_t channel; /**< Selected channel when not idle. */
 } measure_svc_cal_transaction_t;
 
-/** @brief Open a transaction by copying the target's active table to staging. */
+/** @brief Open an empty replacement transaction for the selected target. */
 esp_err_t measure_svc_calibration_start(measure_kind_t kind, measure_channel_t channel);
 /** @brief Read the current transaction state and selected target. */
 esp_err_t measure_svc_calibration_get_transaction(measure_svc_cal_transaction_t *transaction);

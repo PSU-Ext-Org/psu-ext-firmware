@@ -967,6 +967,34 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# PSU-EXT configuration
+#
+
+#
+# License information
+#
+
+#
+# Copyright 2026 The PSU-EXT Authors
+#
+
+#
+# Firmware license: Apache License, Version 2.0
+#
+
+#
+# See the repository LICENSE and THIRD-PARTY-NOTICES.md files.
+#
+# end of License information
+
+#
+# Calibration
+#
+# CONFIG_PSUEXT_CAL_REQUIRE_MIN_POINTS_PER_PGA is not set
+# end of Calibration
+# end of PSU-EXT configuration
+
+#
 # Compiler options
 #
 # default:

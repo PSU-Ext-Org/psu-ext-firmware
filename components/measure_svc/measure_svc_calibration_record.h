@@ -23,6 +23,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #include "measure_svc_calibration_table.h"
 
@@ -30,7 +31,8 @@
 extern "C" {
 #endif
 
-#define MEASURE_SVC_CAL_RECORD_SIZE 268U /**< Fixed encoded record length in bytes. */
+#define MEASURE_SVC_CAL_RECORD_SIZE 396U /**< Fixed version 4 encoded record length. */
+#define MEASURE_SVC_CAL_RECORD_V3_SIZE 268U /**< Legacy version 3 record length. */
 
 /**
  * @brief Encode a valid table into the versioned, checksummed wire format.
@@ -50,6 +52,9 @@ bool measure_svc_cal_record_encode(
  */
 bool measure_svc_cal_record_decode(
     const uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE],
+    measure_svc_cal_table_t *table);
+
+bool measure_svc_cal_record_decode_sized(const uint8_t *record, size_t record_size,
     measure_svc_cal_table_t *table);
 
 #ifdef __cplusplus

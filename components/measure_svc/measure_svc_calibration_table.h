@@ -32,7 +32,7 @@ extern "C" {
 
 /** @brief One persistent interpolation knot in raw and physical u4 domains. */
 typedef struct {
-    int16_t raw_code; /**< Native signed ADS1115 conversion code. */
+    int32_t raw_code_q16; /**< Signed Q16.16 ADS1115 conversion coordinate. */
     uint32_t actual_u4; /**< Reference physical value multiplied by 10,000. */
     uint16_t pga_full_scale_mv; /**< PGA full-scale magnitude in millivolts. */
 } measure_svc_cal_table_point_t;

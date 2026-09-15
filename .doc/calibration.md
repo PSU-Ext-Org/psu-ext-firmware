@@ -15,8 +15,17 @@ volatile and affect staging only. Measurements, history, OVP, and OCP continue
 using the active committed tables until `CALibration:COMMit` succeeds. `ABORt`
 or reset before commit discards staged changes.
 
-Each table can contain up to 32 points and must contain at least two points for
-every configured PGA. Points must be contiguous from `POINt1` to the current
+`CALibration:STARt` begins an empty replacement table: it does not retain points
+from the active calibration. At each point, the firmware discards two fresh
+conversions and then averages the currently configured voltage or current
+averaging count. The resulting signed raw coordinate retains its fractional
+ADC-code mean internally; command syntax and point-query formatting are unchanged.
+
+Each table can contain up to 32 points and must contain at least the configured
+minimum number of points for every PGA when the optional per-range validation
+is enabled. Set or disable it in `menuconfig` under `PSU-EXT configuration` >
+`Calibration`; its default is two. Points must be
+contiguous from `POINt1` to the current
 count. Within each PGA, captured raw ADC voltage and supplied actual value must
 both increase strictly; points from different PGAs may be interleaved. Current
 calibration for `CH0` is unsupported.
