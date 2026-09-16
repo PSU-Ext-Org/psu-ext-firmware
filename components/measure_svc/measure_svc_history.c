@@ -84,7 +84,9 @@ esp_err_t measure_svc_history_init(void)
     for (size_t i = 0; i < 4U; ++i) {
         if (s_rings[i].samples == NULL) {
             s_rings[i].samples = heap_caps_calloc(
-                s_rings[i].capacity, sizeof(measure_svc_sample_t), MALLOC_CAP_SPIRAM);
+                s_rings[i].capacity,
+                sizeof(measure_svc_sample_t),
+                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (s_rings[i].samples == NULL) {
                 free_rings();
                 return ESP_ERR_NO_MEM;

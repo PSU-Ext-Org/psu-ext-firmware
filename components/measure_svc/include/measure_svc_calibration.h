@@ -30,12 +30,15 @@
 extern "C" {
 #endif
 
-#define MEASURE_SVC_CAL_MAX_POINTS 8U /**< Maximum points in one target table. */
+#define MEASURE_SVC_CAL_MAX_POINTS 32U /**< Maximum points across all PGA ranges. */
 
 /** @brief One raw-to-reference calibration point in u4 fixed point. */
 typedef struct {
     uint32_t raw_voltage_u4; /**< Uncalibrated ADC-domain value times 10,000. */
     uint32_t actual_voltage_u4; /**< Reference physical value times 10,000. */
+    uint16_t pga_full_scale_mv; /**< ADS1115 PGA full-scale magnitude in millivolts. */
+    int16_t raw_code; /**< Native signed ADS1115 code retained without voltage rounding. */
+    int32_t raw_code_q16; /**< Native signed ADS1115 coordinate in Q16.16. */
 } measure_svc_cal_point_t;
 
 /** @brief State of the single global calibration transaction. */
@@ -52,7 +55,7 @@ typedef struct {
     measure_channel_t channel; /**< Selected channel when not idle. */
 } measure_svc_cal_transaction_t;
 
-/** @brief Open a transaction by copying the target's active table to staging. */
+/** @brief Open an empty replacement transaction for the selected target. */
 esp_err_t measure_svc_calibration_start(measure_kind_t kind, measure_channel_t channel);
 /** @brief Read the current transaction state and selected target. */
 esp_err_t measure_svc_calibration_get_transaction(measure_svc_cal_transaction_t *transaction);
@@ -62,7 +65,7 @@ esp_err_t measure_svc_calibration_abort(void);
  * @brief Capture a stable fresh raw window and stage one reference point.
  * @param kind Voltage or current calibration target.
  * @param channel Logical target channel.
- * @param point_index One-based point index from 1 through 8.
+ * @param point_index One-based point index from 1 through 32.
  * @param actual_u4 Reference physical value multiplied by 10,000.
  * @param stored_point Optional output receiving the staged raw/reference pair.
  */

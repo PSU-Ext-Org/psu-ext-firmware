@@ -16,7 +16,7 @@
 
 /**
  * @file measure_svc_calibration_persistence.h
- * @brief NVS loading, migration, and storage for calibration tables.
+ * @brief NVS loading, defaults, and storage for calibration tables.
  */
 
 #pragma once
@@ -30,9 +30,10 @@ extern "C" {
 #endif
 
 /**
- * @brief Load one calibration target, including legacy two-point migration.
+ * @brief Load one range-aware calibration target or create nominal defaults.
  *
- * Missing or malformed records produce the target's safe default table.
+ * Missing, malformed, old-format, or range-incompatible records produce the
+ * target's nominal two-point-per-PGA default table.
  *
  * @param kind Calibration quantity selecting the storage key.
  * @param channel Logical channel selecting the storage key.

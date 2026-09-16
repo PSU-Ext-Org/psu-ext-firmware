@@ -20,7 +20,7 @@ extern "C" {
 
 #ifndef MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ
 /** @brief Default rate per active input when the application does not override it. */
-#define MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ 10U
+#define MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ 100U
 #endif
 
 /** @brief Mapping from logical measurements to physical provider inputs. */
@@ -40,6 +40,10 @@ esp_err_t measure_svc_init(void);
 esp_err_t measure_svc_init_with_config(const measure_svc_config_t *config);
 /** @brief Set the sampling rate per active physical input, clamped to limits. */
 esp_err_t measure_svc_set_sample_rate_hz(uint32_t hz);
+/** @brief Persist and activate an ADS1115 rate: 8, 16, 32, 64, 128, 250, 475, or 860 SPS. */
+esp_err_t measure_svc_set_adc_data_rate_sps(uint16_t sps);
+/** @brief Read the active ADS1115 conversion rate. */
+esp_err_t measure_svc_get_adc_data_rate_sps(uint16_t *sps);
 /** @brief Start the background sampler; repeated calls are harmless. */
 esp_err_t measure_svc_start_sampling(void);
 /** @brief Return the active provider name, or a diagnostic fallback string. */

@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -44,19 +46,21 @@ typedef struct {
         measure_input_t input,
         measure_kind_t kind,
         uint32_t *value_u4);
-    /** Read one fresh uncalibrated provider value in u4. */
+    /** Read the latest uncalibrated provider value in u4. */
     esp_err_t (*read_raw_value_u4)(
         measure_input_t input,
         measure_kind_t kind,
         uint32_t *value_u4);
-    /** Read one fresh ADC conversion with both display and native-code forms. */
+    /** Read the latest ADC sample and its unique provider conversion ID. */
     esp_err_t (*read_raw_sample)(
         measure_input_t input,
         measure_kind_t kind,
         uint32_t *value_u4,
-        int16_t *raw_code);
+        int16_t *raw_code,
+        uint32_t *source_generation,
+        uint16_t *pga_full_scale_mv);
     /** Convert a native ADC code to the provider's raw u4 representation. */
-    uint32_t (*raw_code_to_value_u4)(int16_t raw_code);
+    uint32_t (*raw_code_to_value_u4)(int16_t raw_code, uint16_t pga_full_scale_mv);
 } measure_provider_t;
 
 /**
@@ -71,6 +75,15 @@ esp_err_t measure_svc_set_prov(const measure_provider_t *provider);
 esp_err_t measure_prov_ads1115_init(void);
 /** @brief Return the production ADS1115 provider contract. */
 const measure_provider_t *measure_prov_ads1115_get(void);
+/** @brief Persist and activate one supported ADS1115 conversion rate. */
+esp_err_t measure_prov_ads1115_set_data_rate_sps(uint16_t sps);
+/** @brief Return the active ADS1115 conversion rate. */
+esp_err_t measure_prov_ads1115_get_data_rate_sps(uint16_t *sps);
+/** @brief Return configured ADS1115 PGA full-scale values in ascending order. */
+size_t measure_prov_ads1115_get_configured_pgas(
+    uint16_t *pga_full_scale_mv, size_t capacity);
+/** @brief Report whether a PGA full-scale value is configured for autoranging. */
+bool measure_prov_ads1115_is_pga_configured(uint16_t pga_full_scale_mv);
 /** @brief Return the synthetic provider used by tests and diagnostics. */
 const measure_provider_t *measure_prov_fake_get(void);
 

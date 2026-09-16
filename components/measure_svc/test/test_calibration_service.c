@@ -116,7 +116,11 @@ static esp_err_t capture_point_with_raw(
         pdPASS,
         xTaskCreate(capture_task, "cal_cap", 4096U, &args, 5U, NULL));
     vTaskDelay(pdMS_TO_TICKS(50U));
-    const int16_t raw_code = (int16_t)(((uint64_t)raw_u4 * 32767U + 10240U) / 20480U);
+    const uint16_t pga_full_scale_mv = point_index <= 2U ? 256U :
+        (point_index <= 4U ? 512U : 2048U);
+    const uint32_t full_scale_u4 = (uint32_t)pga_full_scale_mv * 10U;
+    const int16_t raw_code = (int16_t)(((uint64_t)raw_u4 * 32768U +
+        (full_scale_u4 / 2U)) / full_scale_u4);
     for (uint8_t i = 0U;
          i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
          ++i) {
@@ -126,6 +130,7 @@ static esp_err_t capture_point_with_raw(
             .physical_input = input_for(kind, channel),
             .raw_value_u4 = raw_u4,
             .raw_code = raw_code,
+            .pga_full_scale_mv = pga_full_scale_mv,
             .value_u4 = raw_u4,
         };
         measure_svc_event_bus_publish(&event);
@@ -146,13 +151,14 @@ static void store_calibration_raw_code(
     int16_t raw_code)
 {
     const uint32_t raw_u4 = raw_code <= 0 ? 0U :
-        (uint32_t)(((uint64_t)(uint16_t)raw_code * 20480U + 16383U) / 32767U);
+        (uint32_t)(((uint64_t)(uint16_t)raw_code * 20480U + 16384U) / 32768U);
     const measure_svc_sample_event_t event = {
         .channel = channel,
         .kind = kind,
         .physical_input = input_for(kind, channel),
         .raw_value_u4 = raw_u4,
         .raw_code = raw_code,
+        .pga_full_scale_mv = 2048U,
         .value_u4 = raw_u4,
     };
     measure_svc_event_bus_publish(&event);
@@ -171,17 +177,18 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
 {
     ensure_measure_runtime();
     ensure_calibration_transaction_idle();
+    const int16_t high_code_2200 = (int16_t)(((uint64_t)2200U * 32768U + 10240U) / 20480U);
 
     const uint32_t active_before = measure_svc_calibration_apply_target_u4(
-        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U);
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U);
     const uint32_t voltage_ch1_before = measure_svc_calibration_apply_target_u4(
-        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U);
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U, 2048U);
     const uint32_t current_ch1_before = measure_svc_calibration_apply_target_u4(
-        MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U);
+        MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U, 2048U);
 
     uint8_t count = 0U;
     TEST_ESP_OK(measure_svc_calibration_get_count(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &count));
-    TEST_ASSERT_EQUAL_UINT8(2U, count);
+    TEST_ASSERT_EQUAL_UINT8(6U, count);
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1));
@@ -197,6 +204,10 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
     TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, 1000U, 10000U));
     TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, 1100U, 11000U));
     TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2U, 2200U, 22000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 3U, 1100U, 11000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 4U, 2200U, 22000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 5U, 1100U, 11000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 6U, 2200U, 22000U));
 
     measure_svc_cal_point_t point;
     TEST_ESP_OK(measure_svc_calibration_get_point(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, &point));
@@ -206,17 +217,18 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
     TEST_ASSERT_EQUAL_UINT32(
         active_before,
         measure_svc_calibration_apply_target_u4(
-            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U));
+            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ESP_OK(measure_svc_calibration_commit());
-    TEST_ASSERT_EQUAL_UINT32(22000U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 2200U));
+    TEST_ASSERT_EQUAL_UINT32(22000U, measure_svc_calibration_apply_target_u4(
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ASSERT_EQUAL_UINT32(
         voltage_ch1_before,
         measure_svc_calibration_apply_target_u4(
-            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U));
+            MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 10000U, 2048U));
     TEST_ASSERT_EQUAL_UINT32(
         current_ch1_before,
         measure_svc_calibration_apply_target_u4(
-            MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U));
+            MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5000U, 2048U));
 
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_commit());
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_abort());
@@ -238,10 +250,14 @@ TEST_CASE("calibration invalid commit and persistence failure keep transaction o
     TEST_ASSERT_EQUAL(MEASURE_SVC_CAL_TRANSACTION_OPEN, transaction.state);
 
     TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 2U, 200U, 2000U));
-    const uint32_t active_before = measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U);
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 3U, 100U, 1000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 4U, 200U, 2000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 5U, 100U, 1000U));
+    TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 6U, 200U, 2000U));
+    const uint32_t active_before = measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U);
     TEST_ESP_OK(nvs_flash_deinit());
     TEST_ASSERT_NOT_EQUAL(ESP_OK, measure_svc_calibration_commit());
-    TEST_ASSERT_EQUAL_UINT32(active_before, measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U));
+    TEST_ASSERT_EQUAL_UINT32(active_before, measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U));
     TEST_ESP_OK(nvs_flash_init());
 
     TEST_ESP_OK(measure_svc_calibration_get_transaction(&transaction));
@@ -276,27 +292,31 @@ TEST_CASE("calibration stale capture cannot publish after abort", "[calibration]
     vTaskDelay(pdMS_TO_TICKS(100U));
 
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, args.result);
-    TEST_ASSERT_NOT_EQUAL(12345U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 1234U));
+    TEST_ASSERT_NOT_EQUAL(12345U, measure_svc_calibration_apply_target_u4(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 1234U, 2048U));
 }
 
-TEST_CASE("calibration startup loads blob legacy missing invalid and independent fallback", "[calibration][startup]")
+TEST_CASE("calibration startup loads range-aware blobs and independently defaults invalid data", "[calibration][startup]")
 {
     ensure_measure_runtime();
     ensure_calibration_transaction_idle();
     reset_nvs();
 
     const measure_svc_cal_table_t valid = {
-        .count = 2U,
+        .count = 6U,
         .points = {
-            {.raw_u4 = 10U, .actual_u4 = 100U},
-            {.raw_u4 = 20U, .actual_u4 = 200U},
+            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 256U},
+            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 512U},
+            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 2048U},
+            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 256U},
+            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 512U},
+            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 2048U},
         },
     };
     TEST_ESP_OK(measure_svc_cal_persistence_store(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &valid));
     measure_svc_cal_table_t loaded = {0};
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &loaded));
-    TEST_ASSERT_EQUAL_UINT8(2U, loaded.count);
-    TEST_ASSERT_EQUAL_UINT32(200U, loaded.points[1].actual_u4);
+    TEST_ASSERT_EQUAL_UINT8(6U, loaded.count);
+    TEST_ASSERT_EQUAL_UINT32(200U, loaded.points[5].actual_u4);
 
     reset_nvs();
     nvs_handle_t handle;
@@ -308,8 +328,8 @@ TEST_CASE("calibration startup loads blob legacy missing invalid and independent
     TEST_ESP_OK(nvs_commit(handle));
     nvs_close(handle);
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, &loaded));
-    TEST_ASSERT_EQUAL_UINT32(40U, loaded.points[1].raw_u4);
-    TEST_ASSERT_EQUAL_UINT32(400U, loaded.points[1].actual_u4);
+    TEST_ASSERT_EQUAL_UINT8(6U, loaded.count);
+    TEST_ASSERT_EQUAL_UINT16(512U, loaded.points[2].pga_full_scale_mv);
 
     reset_nvs();
     uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE];
@@ -317,7 +337,7 @@ TEST_CASE("calibration startup loads blob legacy missing invalid and independent
     record[4] = 0xFFU;
     write_blob(CAL_NVS_KEY_V_CH0, record, sizeof(record));
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &loaded));
-    TEST_ASSERT_EQUAL_UINT32(175000U, loaded.points[1].actual_u4);
+    TEST_ASSERT_EQUAL_UINT32(44799U, loaded.points[1].actual_u4);
 
     reset_nvs();
     TEST_ASSERT_TRUE(measure_svc_cal_record_encode(&valid, record));
@@ -325,7 +345,7 @@ TEST_CASE("calibration startup loads blob legacy missing invalid and independent
     write_blob(CAL_NVS_KEY_I_CH1, record, sizeof(record));
     TEST_ESP_OK(measure_svc_cal_persistence_store(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &valid));
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &loaded));
-    TEST_ASSERT_EQUAL_UINT32(200U, loaded.points[1].actual_u4);
+    TEST_ASSERT_EQUAL_UINT32(200U, loaded.points[5].actual_u4);
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, &loaded));
-    TEST_ASSERT_EQUAL_UINT32(10000U, loaded.points[1].actual_u4);
+    TEST_ASSERT_EQUAL_UINT32(5120U, loaded.points[1].actual_u4);
 }

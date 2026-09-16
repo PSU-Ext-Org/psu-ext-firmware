@@ -35,6 +35,7 @@
 static const char *TAG = "measure_sampler";
 static TaskHandle_t s_task_handle;
 static uint32_t s_sample_rate_hz = MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ;
+static uint32_t s_last_published_generation[4];
 
 static uint32_t clamp_rate(uint32_t hz)
 {
@@ -62,12 +63,23 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
 {
     uint32_t raw_u4;
     int16_t raw_code;
+    uint32_t source_generation;
+    uint16_t pga_full_scale_mv;
     esp_err_t err = measure_svc_core_read_raw_sample(
-        input, MEASURE_KIND_VOLTAGE, &raw_u4, &raw_code);
+        input, MEASURE_KIND_VOLTAGE, &raw_u4, &raw_code, &source_generation,
+        &pga_full_scale_mv);
+    if (err == ESP_ERR_NOT_FINISHED) {
+        return;
+    }
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "sampling AIN%d failed: %s", (int)input, esp_err_to_name(err));
         return;
     }
+    if ((source_generation != 0U) &&
+        (s_last_published_generation[(size_t)input] == source_generation)) {
+        return;
+    }
+    s_last_published_generation[(size_t)input] = source_generation;
 
     const measure_svc_sample_event_t event = {
         .kind = kind,
@@ -76,7 +88,10 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
         .time_ms = (uint32_t)(esp_timer_get_time() / 1000LL),
         .raw_value_u4 = raw_u4,
         .raw_code = raw_code,
-        .value_u4 = measure_svc_calibration_apply_target_u4(kind, channel, raw_u4),
+        .source_generation = source_generation,
+        .pga_full_scale_mv = pga_full_scale_mv,
+        .value_u4 = measure_svc_calibration_apply_target_u4(
+            kind, channel, raw_code, pga_full_scale_mv),
     };
     measure_svc_event_bus_publish(&event);
 }

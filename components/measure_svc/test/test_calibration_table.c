@@ -1,18 +1,4 @@
-/*
- * Copyright 2026 PSU-EXT Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* Copyright 2026 PSU-EXT Authors */
 
 #include "../measure_svc_calibration_table.h"
 
@@ -20,143 +6,95 @@
 
 #include "unity.h"
 
-static measure_svc_cal_table_t make_table(uint8_t count)
+static measure_svc_cal_table_t make_valid_table(void)
 {
-    measure_svc_cal_table_t table = {.count = count};
-    for (uint8_t i = 0; i < count; ++i) {
-        table.points[i].raw_u4 = (uint32_t)i * 100U;
-        table.points[i].actual_u4 = (uint32_t)i * 1000U;
-    }
-    return table;
+    return (measure_svc_cal_table_t){
+        .count = 6U,
+        .points = {
+            {.raw_code = 50, .actual_u4 = 500U, .pga_full_scale_mv = 256U},
+            {.raw_code = 100, .actual_u4 = 1000U, .pga_full_scale_mv = 512U},
+            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 2048U},
+            {.raw_code = 150, .actual_u4 = 1500U, .pga_full_scale_mv = 256U},
+            {.raw_code = 200, .actual_u4 = 2000U, .pga_full_scale_mv = 512U},
+            {.raw_code = 20, .actual_u4 = 400U, .pga_full_scale_mv = 2048U},
+        },
+    };
 }
 
-TEST_CASE("calibration table validation rejects invalid shapes", "[calibration][table]")
+TEST_CASE("calibration validates every configured PGA independently", "[calibration][table]")
 {
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(NULL));
-
-    measure_svc_cal_table_t table = make_table(0U);
-    TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
-
-    table = make_table(1U);
-    TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
-
-    table = make_table(2U);
+    measure_svc_cal_table_t table = make_valid_table();
     TEST_ASSERT_TRUE(measure_svc_cal_table_validate(&table));
 
-    table = make_table(8U);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_validate(&table));
-
-    table = make_table(9U);
+    table.points[5].pga_full_scale_mv = 512U;
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
 
-    table = make_table(3U);
-    table.points[1].raw_u4 = table.points[0].raw_u4;
+    table = make_valid_table();
+    table.points[3].raw_code = table.points[0].raw_code;
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
 
-    table = make_table(3U);
-    table.points[1].actual_u4 = table.points[0].actual_u4;
+    table = make_valid_table();
+    table.points[5].actual_u4 = table.points[2].actual_u4;
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
 
-    table = make_table(3U);
-    table.points[1].raw_u4 = 50U;
-    table.points[2].raw_u4 = 40U;
+    table = make_valid_table();
+    table.points[0].pga_full_scale_mv = 1024U;
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
 
-    table = make_table(3U);
-    table.points[1].actual_u4 = 500U;
-    table.points[2].actual_u4 = 400U;
+    table = make_valid_table();
+    table.count = MEASURE_SVC_CAL_MAX_POINTS + 1U;
     TEST_ASSERT_FALSE(measure_svc_cal_table_validate(&table));
 }
 
-TEST_CASE("calibration table applies points interpolation extrapolation rounding and saturation", "[calibration][table]")
+TEST_CASE("calibration interpolates only within the sample PGA", "[calibration][table]")
 {
-    measure_svc_cal_table_t table = {
-        .count = 4U,
-        .points = {
-            {.raw_u4 = 100U, .actual_u4 = 1000U},
-            {.raw_u4 = 200U, .actual_u4 = 2000U},
-            {.raw_u4 = 400U, .actual_u4 = 5000U},
-            {.raw_u4 = 800U, .actual_u4 = 9000U},
-        },
-    };
+    measure_svc_cal_table_t table = make_valid_table();
     uint32_t actual = 0U;
 
-    for (uint8_t i = 0; i < table.count; ++i) {
-        TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, table.points[i].raw_u4, &actual));
-        TEST_ASSERT_EQUAL_UINT32(table.points[i].actual_u4, actual);
-    }
-
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 150U, &actual));
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 100U, 256U, &actual));
+    TEST_ASSERT_EQUAL_UINT32(1000U, actual);
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 150U, 512U, &actual));
     TEST_ASSERT_EQUAL_UINT32(1500U, actual);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 300U, &actual));
-    TEST_ASSERT_EQUAL_UINT32(3500U, actual);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 600U, &actual));
-    TEST_ASSERT_EQUAL_UINT32(7000U, actual);
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 15U, 2048U, &actual));
+    TEST_ASSERT_EQUAL_UINT32(250U, actual);
+    TEST_ASSERT_FALSE(measure_svc_cal_table_apply_u4(&table, 15U, 1024U, &actual));
 
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 50U, &actual));
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 50U, 512U, &actual));
     TEST_ASSERT_EQUAL_UINT32(500U, actual);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 900U, &actual));
-    TEST_ASSERT_EQUAL_UINT32(10000U, actual);
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 30U, 2048U, &actual));
+    TEST_ASSERT_EQUAL_UINT32(700U, actual);
 
     table = (measure_svc_cal_table_t){
-        .count = 2U,
+        .count = 6U,
         .points = {
-            {.raw_u4 = 10U, .actual_u4 = 10U},
-            {.raw_u4 = 12U, .actual_u4 = 11U},
+            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 256U},
+            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 512U},
+            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 2048U},
+            {.raw_code = INT16_MAX, .actual_u4 = 44800U, .pga_full_scale_mv = 256U},
+            {.raw_code = INT16_MAX, .actual_u4 = 89600U, .pga_full_scale_mv = 512U},
+            {.raw_code = INT16_MAX, .actual_u4 = 358400U, .pga_full_scale_mv = 2048U},
         },
     };
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 11U, &actual));
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 1, 512U, &actual));
+    TEST_ASSERT_EQUAL_UINT32(3U, actual);
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 4, 512U, &actual));
     TEST_ASSERT_EQUAL_UINT32(11U, actual);
-
-    table = (measure_svc_cal_table_t){
-        .count = 2U,
-        .points = {
-            {.raw_u4 = 10U, .actual_u4 = 1U},
-            {.raw_u4 = 12U, .actual_u4 = 3U},
-        },
-    };
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 9U, &actual));
-    TEST_ASSERT_EQUAL_UINT32(0U, actual);
-
-    table = (measure_svc_cal_table_t){
-        .count = 2U,
-        .points = {
-            {.raw_u4 = 0U, .actual_u4 = 0U},
-            {.raw_u4 = 1U, .actual_u4 = UINT32_MAX},
-        },
-    };
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 2U, &actual));
-    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, actual);
+    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&table, 1, 2048U, &actual));
+    TEST_ASSERT_EQUAL_UINT32(11U, actual);
 }
 
-TEST_CASE("calibration table cache is only a lookup hint", "[calibration][table]")
+TEST_CASE("calibration supports 32 interleaved points", "[calibration][table]")
 {
-    measure_svc_cal_table_t cached = {
-        .count = 5U,
-        .points = {
-            {.raw_u4 = 0U, .actual_u4 = 0U},
-            {.raw_u4 = 100U, .actual_u4 = 1000U},
-            {.raw_u4 = 200U, .actual_u4 = 3000U},
-            {.raw_u4 = 300U, .actual_u4 = 6000U},
-            {.raw_u4 = 400U, .actual_u4 = 10000U},
-        },
-    };
-    measure_svc_cal_table_t uncached = cached;
-    uint32_t cached_value = 0U;
-    uint32_t uncached_value = 0U;
-
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&cached, 50U, &cached_value));
-    TEST_ASSERT_TRUE(cached.cache_valid);
-    TEST_ASSERT_EQUAL_UINT8(0U, cached.cached_segment);
-
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&cached, 250U, &cached_value));
-    measure_svc_cal_table_invalidate_cache(&uncached);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&uncached, 250U, &uncached_value));
-    TEST_ASSERT_EQUAL_UINT32(uncached_value, cached_value);
-    TEST_ASSERT_EQUAL_UINT8(2U, cached.cached_segment);
-
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&cached, 450U, &cached_value));
-    TEST_ASSERT_EQUAL_UINT8(3U, cached.cached_segment);
-    TEST_ASSERT_TRUE(measure_svc_cal_table_apply_u4(&cached, 0U, &cached_value));
-    TEST_ASSERT_EQUAL_UINT8(0U, cached.cached_segment);
+    measure_svc_cal_table_t table = {.count = MEASURE_SVC_CAL_MAX_POINTS};
+    for (uint8_t index = 0U; index < MEASURE_SVC_CAL_MAX_POINTS; ++index) {
+        const uint8_t ordinal = (uint8_t)(index / 3U + 1U);
+        static const uint16_t pgas[] = {256U, 512U, 2048U};
+        table.points[index] = (measure_svc_cal_table_point_t){
+            .raw_code = (int16_t)ordinal * 100,
+            .actual_u4 = (uint32_t)ordinal * 1000U,
+            .pga_full_scale_mv = pgas[index % 3U],
+        };
+    }
+    TEST_ASSERT_TRUE(measure_svc_cal_table_validate(&table));
 }

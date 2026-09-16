@@ -68,6 +68,32 @@ static void publish_code(int16_t code)
         .channel = MEASURE_CHANNEL_0,
         .physical_input = MEASURE_INPUT_ADS1115_AIN0,
         .raw_code = code,
+        .pga_full_scale_mv = 2048U,
+    };
+    measure_svc_event_bus_publish(&event);
+}
+
+static void publish_code_with_pga(int16_t code, uint16_t pga_full_scale_mv)
+{
+    const measure_svc_sample_event_t event = {
+        .kind = MEASURE_KIND_VOLTAGE,
+        .channel = MEASURE_CHANNEL_0,
+        .physical_input = MEASURE_INPUT_ADS1115_AIN0,
+        .raw_code = code,
+        .pga_full_scale_mv = pga_full_scale_mv,
+    };
+    measure_svc_event_bus_publish(&event);
+}
+
+static void publish_code_generation(int16_t code, uint32_t source_generation)
+{
+    const measure_svc_sample_event_t event = {
+        .kind = MEASURE_KIND_VOLTAGE,
+        .channel = MEASURE_CHANNEL_0,
+        .physical_input = MEASURE_INPUT_ADS1115_AIN0,
+        .raw_code = code,
+        .source_generation = source_generation,
+        .pga_full_scale_mv = 2048U,
     };
     measure_svc_event_bus_publish(&event);
 }
@@ -102,7 +128,7 @@ TEST_CASE("calibration captures a stable averaged ADS1115-code window", "[calibr
     }
     TEST_ASSERT_TRUE(measure_svc_cal_capture_window_is_stable(&window));
     TEST_ASSERT_EQUAL_INT16(15, measure_svc_cal_capture_window_mean(&window));
-    TEST_ASSERT_EQUAL_UINT32(9U, (15U * 20480U + 16383U) / 32767U);
+    TEST_ASSERT_EQUAL_UINT32(9U, (15U * 20480U + 16384U) / 32768U);
     TEST_ASSERT_EQUAL_UINT32(10U, (2U * 1U + 14U * 11U + 8U) / 16U);
 
     ensure_runtime_and_idle();
@@ -122,6 +148,7 @@ TEST_CASE("calibration captures a stable averaged ADS1115-code window", "[calibr
     TEST_ESP_OK(measure_svc_calibration_get_point(
         MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, &point));
     TEST_ASSERT_EQUAL_UINT32(1005U, point.raw_voltage_u4);
+    TEST_ASSERT_EQUAL_INT16(1608, point.raw_code);
     TEST_ESP_OK(measure_svc_calibration_abort());
 }
 
@@ -161,9 +188,67 @@ TEST_CASE("calibration retries an unstable ADS1115-code window", "[calibration][
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
     capture_args_t timeout_args = {.result = ESP_ERR_INVALID_STATE};
     TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "timeout_cap", 4096U, &timeout_args, 5U, NULL));
-    for (uint16_t i = 0U; (i < 550U) && (timeout_args.result == ESP_ERR_INVALID_STATE); ++i) {
+    for (uint16_t i = 0U; (i < 3050U) && (timeout_args.result == ESP_ERR_INVALID_STATE); ++i) {
         vTaskDelay(pdMS_TO_TICKS(10U));
     }
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, timeout_args.result);
+    TEST_ESP_OK(measure_svc_calibration_abort());
+}
+
+TEST_CASE("calibration restarts capture when PGA changes", "[calibration][capture]")
+{
+    ensure_runtime_and_idle();
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    TEST_ESP_OK(measure_svc_calibration_clear(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    capture_args_t args = {.result = ESP_ERR_INVALID_STATE};
+    TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "pga_cap", 4096U, &args, 5U, NULL));
+    vTaskDelay(pdMS_TO_TICKS(50U));
+
+    for (uint8_t index = 0U; index < 7U; ++index) {
+        publish_code_with_pga(1600, 512U);
+    }
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, args.result);
+    for (uint8_t index = 0U;
+         index < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES +
+             MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         ++index) {
+        publish_code_with_pga(1600, 2048U);
+    }
+    wait_for_result(&args);
+    TEST_ESP_OK(args.result);
+
+    measure_svc_cal_point_t point;
+    TEST_ESP_OK(measure_svc_calibration_get_point(
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, &point));
+    TEST_ASSERT_EQUAL_UINT16(2048U, point.pga_full_scale_mv);
+    TEST_ESP_OK(measure_svc_calibration_abort());
+}
+
+TEST_CASE("calibration ignores repeated publications of one ADC conversion", "[calibration][capture]")
+{
+    ensure_runtime_and_idle();
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    TEST_ESP_OK(measure_svc_calibration_clear(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+
+    capture_args_t args = {.result = ESP_ERR_INVALID_STATE};
+    TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "unique_cap", 4096U, &args, 5U, NULL));
+    vTaskDelay(pdMS_TO_TICKS(50U));
+
+    for (uint32_t generation = 1U;
+         generation < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES +
+             MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         ++generation) {
+        for (uint8_t duplicate = 0U; duplicate < 10U; ++duplicate) {
+            publish_code_generation(1600, generation);
+        }
+    }
+    vTaskDelay(pdMS_TO_TICKS(20U));
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, args.result);
+
+    publish_code_generation(
+        1600,
+        MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+    wait_for_result(&args);
+    TEST_ESP_OK(args.result);
     TEST_ESP_OK(measure_svc_calibration_abort());
 }
