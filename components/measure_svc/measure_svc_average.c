@@ -21,7 +21,10 @@
 
 #include "esp_check.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "nvs.h"
+
 #include "measure_svc_core.h"
 #include "measure_svc_history.h"
 #include "measure_svc_samples.h"
@@ -38,6 +41,8 @@ static uint32_t s_counts[3] = {
     MEASURE_SVC_DEFAULT_AVERAGE_COUNT,
 };
 static measure_svc_sample_t *s_samples;
+/* Protect the shared scratch samples through both history copy and summation. */
+static SemaphoreHandle_t s_samples_mutex;
 
 static esp_err_t kind_slot(measure_kind_t kind, uint32_t **count, const char **key)
 {
@@ -81,6 +86,12 @@ static esp_err_t load_count(const char *key, uint32_t *count)
 
 esp_err_t measure_svc_average_init(void)
 {
+    if (s_samples_mutex == NULL) {
+        s_samples_mutex = xSemaphoreCreateMutex();
+        if (s_samples_mutex == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
     if (s_samples == NULL) {
         s_samples = heap_caps_calloc(
             MEASURE_SVC_MAX_AVERAGE_COUNT,
@@ -139,7 +150,7 @@ esp_err_t measure_svc_read(measure_channel_t channel, measure_kind_t kind, uint3
     if (value_u4 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (s_samples == NULL) {
+    if ((s_samples == NULL) || (s_samples_mutex == NULL)) {
         return ESP_ERR_INVALID_STATE;
     }
     if ((channel == MEASURE_CHANNEL_0) && (kind != MEASURE_KIND_VOLTAGE)) {
@@ -153,15 +164,28 @@ esp_err_t measure_svc_read(measure_channel_t channel, measure_kind_t kind, uint3
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    ESP_RETURN_ON_ERROR(measure_svc_get_average_count(kind, &average_count), TAG, "reading average count failed");
-    ESP_RETURN_ON_ERROR(measure_svc_history_copy_latest_samples(
-        channel, kind, average_count, s_samples, &copied_count), TAG, "copying samples failed");
+    ESP_RETURN_ON_ERROR(
+        measure_svc_get_average_count(kind, &average_count), TAG,
+        "reading average count failed");
+
+    /* SCPI and the display may read different kinds concurrently. */
+    if (xSemaphoreTake(s_samples_mutex, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t err = measure_svc_history_copy_latest_samples(
+        channel, kind, average_count, s_samples, &copied_count);
+    if (err != ESP_OK) {
+        xSemaphoreGive(s_samples_mutex);
+        return err;
+    }
     if (copied_count == 0U) {
+        xSemaphoreGive(s_samples_mutex);
         return ESP_ERR_INVALID_STATE;
     }
     for (size_t i = 0; i < copied_count; ++i) {
         total_u4 += s_samples[i].value_u4;
     }
+    xSemaphoreGive(s_samples_mutex);
     *value_u4 = (uint32_t)((total_u4 + (copied_count / 2U)) / copied_count);
     return ESP_OK;
 }

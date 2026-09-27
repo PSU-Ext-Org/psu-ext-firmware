@@ -13,21 +13,7 @@
 # limitations under the License.
 
 idf_component_register(
-    SRCS "main.c"
-    INCLUDE_DIRS .
-    REQUIRES
-        clock_test
-        flash_store
-        measure_svc
-        output_ctrl
-        protection_svc
-        ssd1306
-        status_led
-        tcp_server
-        timebase_svc
-        timer_svc
-        trigger_svc
-        usb_com
-        wifi_connection
-        wifi_manager
+    SRCS "ssd1306.c"
+    INCLUDE_DIRS "include"
+    PRIV_REQUIRES measure_svc output_ctrl esp_driver_i2c
 )
