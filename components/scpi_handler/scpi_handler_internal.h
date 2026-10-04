@@ -211,6 +211,19 @@ bool scpi_handler_handle_calibration_command(
     scpi_handler_write_response_fn_t write_response);
 
 /**
+ * @brief Handle `SYST:MQTT:*` configuration/status SCPI commands.
+ *
+ * @param keyword Uppercase command keyword.
+ * @param parsed Parsed command payload; string arguments are unquoted in place.
+ * @param write_response Text response callback.
+ * @return `true` if the command was recognized.
+ */
+bool scpi_handler_handle_mqtt_command(
+    const char *keyword,
+    scpi_handler_parsed_command_t *parsed,
+    scpi_handler_write_response_fn_t write_response);
+
+/**
  * @brief Handle WiFi configuration/status SCPI commands.
  *
  * @param keyword Uppercase command keyword.
