@@ -286,6 +286,20 @@ esp_err_t protection_svc_check_ch1_enable_allowed(void)
     return ESP_OK;
 }
 
+esp_err_t protection_svc_set_ch1_output(bool enabled, output_ctrl_change_cause_t cause)
+{
+    if (enabled) {
+        ESP_RETURN_ON_ERROR(protection_svc_clear_trips(PROTECTION_SVC_CHANNEL_CH1), TAG, "clearing CH1 trips failed");
+
+        const esp_err_t err = protection_svc_check_ch1_enable_allowed();
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    return output_ctrl_set_with_cause(PROTECTION_SVC_CHANNEL_CH1, enabled, cause);
+}
+
 static void protection_svc_check_sample(
     measure_channel_t channel,
     measure_kind_t kind,

@@ -98,21 +98,7 @@ static void scpi_handler_handle_output_set(
         return;
     }
 
-    if (enabled) {
-        err = protection_svc_clear_trips(channel);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "OUTP", err);
-            return;
-        }
-
-        err = protection_svc_check_ch1_enable_allowed();
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "OUTP", err);
-            return;
-        }
-    }
-
-    err = output_ctrl_set_with_cause(channel, enabled, OUTPUT_CTRL_CHANGE_CAUSE_SCPI);
+    err = protection_svc_set_ch1_output(enabled, OUTPUT_CTRL_CHANGE_CAUSE_SCPI);
     if (err != ESP_OK) {
         scpi_handler_write_esp_error(write_response, "OUTP", err);
     }

@@ -15,5 +15,5 @@
 idf_component_register(
     SRC_DIRS "."
     INCLUDE_DIRS "."
-    REQUIRES unity scpi_handler measure_svc nvs_flash
+    REQUIRES unity scpi_handler measure_svc nvs_flash output_ctrl protection_svc freertos
 )
