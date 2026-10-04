@@ -12,18 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.22)
-
-get_filename_component(PSU_EXT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-
-set(EXTRA_COMPONENT_DIRS
-    "${PSU_EXT_ROOT}/components"
-    "$ENV{IDF_PATH}/components/unity/test_apps/main"
+idf_component_register(
+    SRCS
+        "mqtt_svc.c"
+        "mqtt_svc_command.c"
+        "mqtt_svc_config.c"
+        "mqtt_svc_format.c"
+        "mqtt_svc_payload.c"
+        "mqtt_svc_topics.c"
+        "mqtt_svc_window.c"
+    INCLUDE_DIRS "include"
+    PRIV_REQUIRES
+        esp_event
+        esp_app_format
+        esp_hw_support
+        esp_netif
+        esp_timer
+        esp_wifi
+        freertos
+        mbedtls
+        measure_svc
+        nvs_flash
+        output_ctrl
+        protection_svc
+        wifi_manager
 )
-
-set(COMPONENTS main measure_svc mqtt_svc scpi_handler esp_psram)
-set(TEST_COMPONENTS measure_svc mqtt_svc scpi_handler CACHE STRING "List of psu-ext components with target tests")
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-idf_build_set_property(MINIMAL_BUILD ON)
-project(psu_ext_unit_test)

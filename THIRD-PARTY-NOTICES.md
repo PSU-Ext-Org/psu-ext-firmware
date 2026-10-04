@@ -18,9 +18,11 @@ build configuration for this repository.
 
 | Component | Version | License | Source |
 | --- | --- | --- | --- |
-| ESP-IDF | 6.0.0 | Apache-2.0 | https://github.com/espressif/esp-idf |
+| ESP-IDF | 6.0.2 | Apache-2.0 | https://github.com/espressif/esp-idf |
 | ESP TinyUSB | 2.1.1 | Apache-2.0 | https://components.espressif.com/components/espressif/esp_tinyusb |
-| TinyUSB | 0.19.0~3 | MIT | https://github.com/hathach/tinyusb |
+| TinyUSB | 0.21.0~1 | MIT | https://github.com/hathach/tinyusb |
+| ESP-MQTT | 1.0.0 | Apache-2.0 | https://components.espressif.com/components/espressif/mqtt |
+| cJSON | 1.7.19~2 | MIT | https://github.com/DaveGamble/cJSON |
 | FreeRTOS Kernel | included by ESP-IDF | MIT | https://github.com/FreeRTOS/FreeRTOS-Kernel |
 | lwIP | included by ESP-IDF | BSD-3-Clause | https://savannah.nongnu.org/projects/lwip/ |
 | Mbed TLS | included by ESP-IDF | Apache-2.0 (selected from Apache-2.0 OR GPL-2.0-or-later) | https://github.com/Mbed-TLS/mbedtls |
@@ -57,6 +59,28 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## cJSON (MIT License)
+
+Copyright (c) 2009-2017 Dave Gamble and cJSON contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ## Release-maintenance note
 

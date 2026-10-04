@@ -12,18 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.22)
-
-get_filename_component(PSU_EXT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-
-set(EXTRA_COMPONENT_DIRS
-    "${PSU_EXT_ROOT}/components"
-    "$ENV{IDF_PATH}/components/unity/test_apps/main"
+idf_component_register(
+    SRC_DIRS "."
+    INCLUDE_DIRS "."
+    REQUIRES unity mqtt_svc measure_svc output_ctrl
 )
-
-set(COMPONENTS main measure_svc mqtt_svc scpi_handler esp_psram)
-set(TEST_COMPONENTS measure_svc mqtt_svc scpi_handler CACHE STRING "List of psu-ext components with target tests")
-
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-idf_build_set_property(MINIMAL_BUILD ON)
-project(psu_ext_unit_test)
