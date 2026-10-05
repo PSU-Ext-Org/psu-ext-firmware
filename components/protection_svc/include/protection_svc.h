@@ -25,6 +25,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "output_ctrl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,6 +99,23 @@ esp_err_t protection_svc_clear_trips(uint8_t channel);
  * off.
  */
 esp_err_t protection_svc_check_ch1_enable_allowed(void);
+
+/**
+ * @brief Apply a user-requested CH1 output state with protection gating.
+ *
+ * Shared by every user-facing output control path (SCPI, MQTT). Turning the
+ * output on clears latched CH1 trips, re-checks the CH0 input OVP, and only
+ * then enables the relay. Turning it off is applied unconditionally.
+ *
+ * @param enabled `true` to request the output on, `false` to turn it off.
+ * @param cause Source reported to output change listeners.
+ *
+ * @return
+ * - `ESP_OK` on success
+ * - `ESP_ERR_INVALID_STATE` if CH0 input OVP blocks the enable
+ * - Errors from `protection_svc_clear_trips()` or `output_ctrl_set_with_cause()`
+ */
+esp_err_t protection_svc_set_ch1_output(bool enabled, output_ctrl_change_cause_t cause);
 
 #ifdef __cplusplus
 }

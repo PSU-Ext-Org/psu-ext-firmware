@@ -26,6 +26,7 @@
 #include "status_led.h"
 #include "usb_com.h"
 #include "measure_svc.h"
+#include "mqtt_svc.h"
 #include "output_ctrl.h"
 #include "protection_svc.h"
 #include "wifi_connection.h"
@@ -79,6 +80,8 @@ void app_main(void)
     ESP_ERROR_CHECK(usb_com_init());
     ESP_ERROR_CHECK(wifi_connection_init());
     ESP_ERROR_CHECK(tcp_server_init());
+    // MQTT is optional; a failure here must not stop the PSU from booting.
+    ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_svc_init());
 
     printf("All components initialized.\n");
 }

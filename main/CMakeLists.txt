@@ -15,5 +15,5 @@
 idf_component_register(
     SRCS "main.c"
     INCLUDE_DIRS .
-    REQUIRES clock_test wifi_manager status_led usb_com wifi_connection tcp_server flash_store measure_svc output_ctrl protection_svc trigger_svc timer_svc timebase_svc
+    REQUIRES clock_test wifi_manager status_led usb_com wifi_connection tcp_server flash_store measure_svc mqtt_svc output_ctrl protection_svc trigger_svc timer_svc timebase_svc
 )

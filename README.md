@@ -3,7 +3,8 @@
 <p align="center">
   ESP-IDF firmware for the PSU-EXT controller.<br />
   USB CDC and Wi-Fi TCP SCPI interfaces for measurement, output control,
-  protection, timers, triggers, and Wi-Fi configuration.
+  protection, timers, triggers, and Wi-Fi configuration, plus an optional MQTT
+  client for Home Assistant.
 </p>
 
 <p align="center">
@@ -21,6 +22,8 @@
 
 - [SCPI reference](.doc/scpi-ref.md)
 - [Calibration guide](.doc/calibration.md)
+- [Home Assistant / MQTT integration](.doc/home-assistant.md)
+- [MQTT architecture](.doc/mqtt-architecture.md)
 
 ## Repository Structure
 
@@ -29,7 +32,8 @@
 | `main/` | Application entry point and composition of the firmware components. |
 | `components/` | Reusable ESP-IDF components for transports, SCPI handling, measurement, output control, protection, triggers, timers, and Wi-Fi. |
 | `components/measure_svc/` | Measurement service and provider boundary. The active firmware build uses the ADS1115 provider; a fake provider source is retained for test and bring-up work. |
-| `components/*/test/` | Component-local Unity test sources, currently for `measure_svc` and `scpi_handler`. |
+| `components/mqtt_svc/` | MQTT client: Home Assistant discovery, telemetry, protection state, and CH1 output control. |
+| `components/*/test/` | Component-local Unity test sources, currently for `measure_svc`, `mqtt_svc`, and `scpi_handler`. |
 | `test/unit/` | ESP-IDF Unity runner configuration and serial smoke-test support for component-local tests. |
 | `managed_components/` | Dependencies resolved by the ESP-IDF Component Manager; do not edit them directly. |
 
@@ -39,6 +43,7 @@
 | --- | --- |
 | USB | USB CDC interface for SCPI commands. |
 | Network | Wi-Fi station interface with a SCPI TCP server on port `5025` when connected. |
+| MQTT | Optional client with Home Assistant MQTT discovery; configured over SCPI, disabled by default. |
 | Measurements | ADS1115-backed voltage and current measurements. |
 | Output relay | CH1 relay on GPIO 38; off at boot. |
 | External triggers | Trigger 1: GPIO 5; Trigger 2: GPIO 4. |
