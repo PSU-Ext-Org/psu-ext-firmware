@@ -282,5 +282,13 @@ TEST_CASE("mqtt discovery payload declares all entities for one device", "[mqtt]
     TEST_ASSERT_NOT_NULL(strstr(payload, "\"value_template\":\"{{ value_json.ocp }}\""));
     TEST_ASSERT_NULL(strstr(payload, "configuration_url"));
 
+    TEST_ASSERT_EQUAL_UINT(1U, count_occurrences(payload, "\"enabled_by_default\":false"));
+    const char *input_ovp = strstr(payload, "\"input_ovp\":{");
+    const char *output_ovp = strstr(payload, "\"output_ovp\":{");
+    const char *hidden = strstr(payload, "\"enabled_by_default\":false");
+    TEST_ASSERT_NOT_NULL(input_ovp);
+    TEST_ASSERT_NOT_NULL(output_ovp);
+    TEST_ASSERT_TRUE((hidden > input_ovp) && (hidden < output_ovp));
+
     mqtt_svc_payload_free(payload);
 }

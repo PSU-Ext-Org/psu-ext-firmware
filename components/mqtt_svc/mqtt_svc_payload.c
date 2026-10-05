@@ -42,21 +42,26 @@ typedef struct {
     bool diagnostic;
     int precision;
     bool from_protection;
+    bool hidden_by_default;
 } mqtt_svc_entity_t;
 
+/*
+ * Input OVP is hidden by default: board 1.1.0 does not sample the CH0 input
+ * voltage yet, so the pre-enable check never trips. Users can enable it in HA.
+ */
 static const mqtt_svc_entity_t MQTT_SVC_ENTITIES[] = {
-    {"voltage", "Voltage", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", true, false, 3, false},
-    {"voltage_min", "Voltage min", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, false, 3, false},
-    {"voltage_max", "Voltage max", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, false, 3, false},
-    {"current", "Current", MQTT_SVC_ENTITY_SENSOR, "current", "A", true, false, 3, false},
-    {"current_max", "Current max", MQTT_SVC_ENTITY_SENSOR, "current", "A", false, false, 3, false},
-    {"power", "Power", MQTT_SVC_ENTITY_SENSOR, "power", "W", true, false, 2, false},
-    {"input_ovp", "Input OVP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true},
-    {"output_ovp", "Output OVP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true},
-    {"ocp", "OCP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true},
-    {"cause", "Last change cause", MQTT_SVC_ENTITY_SENSOR, NULL, NULL, false, true, -1, true},
-    {"ovp_threshold", "OVP threshold", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, true, 2, true},
-    {"ocp_threshold", "OCP threshold", MQTT_SVC_ENTITY_SENSOR, "current", "A", false, true, 3, true},
+    {"voltage", "Voltage", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", true, false, 3, false, false},
+    {"voltage_min", "Voltage min", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, false, 3, false, false},
+    {"voltage_max", "Voltage max", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, false, 3, false, false},
+    {"current", "Current", MQTT_SVC_ENTITY_SENSOR, "current", "A", true, false, 3, false, false},
+    {"current_max", "Current max", MQTT_SVC_ENTITY_SENSOR, "current", "A", false, false, 3, false, false},
+    {"power", "Power", MQTT_SVC_ENTITY_SENSOR, "power", "W", true, false, 2, false, false},
+    {"input_ovp", "Input OVP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true, true},
+    {"output_ovp", "Output OVP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true, false},
+    {"ocp", "OCP", MQTT_SVC_ENTITY_BINARY_SENSOR, "problem", NULL, false, false, -1, true, false},
+    {"cause", "Last change cause", MQTT_SVC_ENTITY_SENSOR, NULL, NULL, false, true, -1, true, false},
+    {"ovp_threshold", "OVP threshold", MQTT_SVC_ENTITY_SENSOR, "voltage", "V", false, true, 2, true, false},
+    {"ocp_threshold", "OCP threshold", MQTT_SVC_ENTITY_SENSOR, "current", "A", false, true, 3, true, false},
 };
 
 const char *mqtt_svc_payload_cause_name(output_ctrl_change_cause_t cause)
@@ -192,6 +197,9 @@ static bool mqtt_svc_payload_add_entity(
     }
     if (ok && entity->diagnostic) {
         ok = cJSON_AddStringToObject(component, "entity_category", "diagnostic") != NULL;
+    }
+    if (ok && entity->hidden_by_default) {
+        ok = cJSON_AddBoolToObject(component, "enabled_by_default", false) != NULL;
     }
     if (ok && (entity->precision >= 0)) {
         ok = cJSON_AddNumberToObject(component, "suggested_display_precision", entity->precision) != NULL;

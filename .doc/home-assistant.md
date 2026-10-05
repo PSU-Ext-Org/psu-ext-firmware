@@ -53,12 +53,18 @@ certificates are not supported yet.
 | Current max | sensor (A) | window maximum |
 | Power | sensor (W, measurement) | mean of per-sample V*I |
 | Output | switch | CH1 relay |
-| Input OVP | binary sensor (problem) | CH0 input OVP latch |
+| Input OVP | binary sensor (problem), **disabled by default** | CH0 input OVP latch |
 | Output OVP | binary sensor (problem) | CH1 output OVP latch |
 | OCP | binary sensor (problem) | CH1 OCP latch |
 | Last change cause | diagnostic sensor | `scpi`, `mqtt`, `trigger`, `ovp`, `ocp`, `timer`, or `none` |
 | OVP threshold | diagnostic sensor (V) | CH1 OVP threshold, read-only |
 | OCP threshold | diagnostic sensor (A) | CH1 OCP threshold, read-only |
+
+**Input OVP** is disabled by default because board revision 1.1.0 does not
+sample the input voltage yet, so it never triggers. To show it, open the
+PSU-EXT device in Home Assistant, select the Input OVP entity, and enable it.
+It is set only when input overvoltage blocks a turn-on, and it stays set until
+`RESET:PROTect CH0` is sent over SCPI.
 
 The telemetry window is the `SYST:MQTT:INT` interval (default 1 s). Min and
 max values show short bursts and dips that the mean hides, such as radio
