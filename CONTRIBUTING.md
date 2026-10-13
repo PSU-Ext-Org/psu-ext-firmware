@@ -43,7 +43,7 @@ development and validation. Test behavior that affects hardware, USB, Wi-Fi,
 measurements, relay control, protection, triggers, or flashing on the device
 before opening a pull request.
 
-Use ESP-IDF 6.0. Build the firmware from the repository root after activating
+Use ESP-IDF 6.1. Build the firmware from the repository root after activating
 the ESP-IDF environment:
 
 ```text
@@ -56,7 +56,7 @@ the relevant component tests for changes to `measure_svc` or `scpi_handler`.
 ## Before opening a pull request
 
 - Use DCO-signed commits.
-- Build the firmware with ESP-IDF 6.0.
+- Build the firmware with ESP-IDF 6.1.
 - Test the affected behavior on a compatible PSU-EXT device.
 - Run relevant component tests for measurement or SCPI changes.
 - Update SCPI, calibration, README, and third-party notice documentation when

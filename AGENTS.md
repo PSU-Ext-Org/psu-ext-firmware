@@ -11,16 +11,16 @@ ESP-IDF output to a temp log and emits only a short success line when the build
 passes. If the build fails, it prints the captured log.
 
 ```powershell
-$log = Join-Path $env:TEMP 'psu-ext-idf-build.log'; . C:\Espressif\tools\Microsoft.v6.0.PowerShell_profile.ps1 *> $log; idf.py build *>> $log; if (Select-String -Path $log -Pattern 'Project build complete\.' -Quiet) { 'idf.py build: OK' } else { Get-Content $log; exit 1 }
+$log = Join-Path $env:TEMP 'psu-ext-idf-build.log'; . C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1 *> $log; idf.py build *>> $log; if (Select-String -Path $log -Pattern 'Project build complete\.' -Quiet) { 'idf.py build: OK' } else { Get-Content $log; exit 1 }
 ```
 
 If you need full live build output for debugging, use the direct command:
 
 ```powershell
-. C:\Espressif\tools\Microsoft.v6.0.PowerShell_profile.ps1; idf.py build
+. C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1; idf.py build
 ```
 
-The generic `C:\esp\v6.0\esp-idf\export.ps1` path may fail in this setup
+The generic `C:\esp\v6.1\esp-idf\export.ps1` path may fail in this setup
 because the installed tools are wired through `C:\Espressif\tools`.
 
 If the build fails with a sandbox `WinError 5` subprocess permission error,

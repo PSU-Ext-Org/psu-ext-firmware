@@ -13,12 +13,12 @@ with the repository's `LICENSE` file.
 
 ## Resolved build dependencies
 
-The versions below are taken from `dependencies.lock` and the ESP-IDF v6.0
+The versions below are taken from `dependencies.lock` and the ESP-IDF v6.1
 build configuration for this repository.
 
 | Component | Version | License | Source |
 | --- | --- | --- | --- |
-| ESP-IDF | 6.0.2 | Apache-2.0 | https://github.com/espressif/esp-idf |
+| ESP-IDF | 6.1.0 | Apache-2.0 | https://github.com/espressif/esp-idf |
 | ESP TinyUSB | 2.1.1 | Apache-2.0 | https://components.espressif.com/components/espressif/esp_tinyusb |
 | TinyUSB | 0.21.0~1 | MIT | https://github.com/hathach/tinyusb |
 | ESP-MQTT | 1.0.0 | Apache-2.0 | https://components.espressif.com/components/espressif/mqtt |

@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   build:
-    name: ESP-IDF 6.0 build
+    name: ESP-IDF 6.1 build
     runs-on: ubuntu-latest
 
     steps:
@@ -53,7 +53,7 @@ jobs:
       - name: Install ESP-IDF
         uses: espressif/install-esp-idf-action@v1
         with:
-          version: v6.0
+          version: v6.1
 
       - name: Compile firmware
         run: idf.py build
