@@ -16,7 +16,7 @@ works on boards exposed as `USB JTAG/serial debug unit`.
 ## Build
 
 ```powershell
-. C:\Espressif\tools\Microsoft.v6.0.PowerShell_profile.ps1
+. C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1
 Set-Location D:\!Electronics\Projects\PSU-EXT-PRIVATE\software\psu-ext\test\unit
 idf.py set-target esp32s3
 idf.py build
@@ -30,7 +30,7 @@ run `idf.py fullclean` (or delete `build/`) so an existing build picks it up.
 Replace `<PORT>` with the ESP32-S3 serial port, for example `COM7`.
 
 ```powershell
-. C:\Espressif\tools\Microsoft.v6.0.PowerShell_profile.ps1
+. C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1
 Set-Location D:\!Electronics\Projects\PSU-EXT-PRIVATE\software\psu-ext\test\unit
 idf.py -p <PORT> flash monitor
 ```
@@ -60,7 +60,7 @@ Exit the monitor with `Ctrl+]`.
 The helper can run a tag selector and check the expected Unity summary:
 
 ```powershell
-C:\Espressif\tools\python\v6.0\venv\Scripts\python.exe run_smoke_serial.py <PORT> --selector "[calibration]" --expect "calibration scpi reports transaction states and malformed commands:PASS" --summary "14 Tests 0 Failures 0 Ignored" --timeout 120
+C:\Espressif\tools\python\v6.1\venv\Scripts\python.exe run_smoke_serial.py <PORT> --selector "[calibration]" --expect "calibration scpi reports transaction states and malformed commands:PASS" --summary "14 Tests 0 Failures 0 Ignored" --timeout 120
 ```
 
 ## Expected Smoke Result

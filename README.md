@@ -50,8 +50,8 @@
 
 ## Build
 
-Install and activate the ESP-IDF 6.0 environment for your operating system by
-following Espressif's [ESP-IDF Get Started guide](https://docs.espressif.com/projects/esp-idf/en/v6.0/esp32/get-started/index.html).
+Install and activate the ESP-IDF 6.1 environment for your operating system by
+following Espressif's [ESP-IDF Get Started guide](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/get-started/index.html).
 
 From this directory, build the firmware with:
 
