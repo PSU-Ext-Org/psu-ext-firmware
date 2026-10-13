@@ -137,6 +137,7 @@ static timer_svc_status_kind_t timer_svc_status_from_output_cause(output_ctrl_ch
         return TIMER_SVC_STATUS_OCP;
     case OUTPUT_CTRL_CHANGE_CAUSE_SCPI:
     case OUTPUT_CTRL_CHANGE_CAUSE_TRIGGER:
+    case OUTPUT_CTRL_CHANGE_CAUSE_MQTT:
     default:
         return TIMER_SVC_STATUS_OVR;
     }

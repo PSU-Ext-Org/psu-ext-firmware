@@ -1,6 +1,6 @@
 #
 # Automatically generated file. DO NOT EDIT.
-# Espressif IoT Development Framework (ESP-IDF) 6.0.0 Project Configuration
+# Espressif IoT Development Framework (ESP-IDF) 6.0.2 Project Configuration
 #
 # default:
 CONFIG_SOC_ADC_SUPPORTED=y
@@ -313,6 +313,8 @@ CONFIG_SOC_RTC_CNTL_CPU_PD_REG_FILE_NUM=549
 # default:
 CONFIG_SOC_RTC_CNTL_TAGMEM_PD_DMA_BUS_WIDTH=128
 # default:
+CONFIG_SOC_RTC_CNTL_NEEDS_ATOMIC_ACCESS=y
+# default:
 CONFIG_SOC_RTCIO_PIN_COUNT=22
 # default:
 CONFIG_SOC_RTCIO_INPUT_OUTPUT_SUPPORTED=y
@@ -358,14 +360,6 @@ CONFIG_SOC_SPI_SCT_REG_NUM=14
 CONFIG_SOC_SPI_SCT_BUFFER_NUM_MAX=y
 # default:
 CONFIG_SOC_SPI_SCT_CONF_BITLEN_MAX=0x3FFFA
-# default:
-CONFIG_SOC_MEMSPI_SRC_FREQ_120M_SUPPORTED=y
-# default:
-CONFIG_SOC_MEMSPI_SRC_FREQ_80M_SUPPORTED=y
-# default:
-CONFIG_SOC_MEMSPI_SRC_FREQ_40M_SUPPORTED=y
-# default:
-CONFIG_SOC_MEMSPI_SRC_FREQ_20M_SUPPORTED=y
 # default:
 CONFIG_SOC_SPIRAM_SUPPORTED=y
 # default:
@@ -434,6 +428,8 @@ CONFIG_SOC_UART_WAKEUP_SUPPORT_ACTIVE_THRESH_MODE=y
 CONFIG_SOC_UHCI_NUM=1
 # default:
 CONFIG_SOC_USB_OTG_PERIPH_NUM=1
+# default:
+CONFIG_SOC_USB_FSLS_PHY_NUM=1
 # default:
 CONFIG_SOC_SHA_DMA_MAX_BUFFER_SIZE=3968
 # default:
@@ -589,6 +585,10 @@ CONFIG_SOC_MEMSPI_CORE_CLK_SHARED_WITH_PSRAM=y
 # default:
 CONFIG_SOC_SPI_MEM_SUPPORT_CACHE_32BIT_ADDR_MAP=y
 # default:
+CONFIG_SOC_SPI_MEM_FLASH_SUPPORT_HPM=y
+# default:
+CONFIG_SOC_MEMSPI_ENCRYPTION_ALIGNMENT=16
+# default:
 CONFIG_SOC_COEX_HW_PTI=y
 # default:
 CONFIG_SOC_EXTERNAL_COEX_LEADER_TX_LINE=y
@@ -598,8 +598,6 @@ CONFIG_SOC_SDMMC_USE_GPIO_MATRIX=y
 CONFIG_SOC_SDMMC_NUM_SLOTS=2
 # default:
 CONFIG_SOC_SDMMC_DATA_WIDTH_MAX=8
-# default:
-CONFIG_SOC_SDMMC_SUPPORT_XTAL_CLOCK=y
 # default:
 CONFIG_SOC_SDMMC_DELAY_PHASE_NUM=4
 # default:
@@ -675,6 +673,11 @@ CONFIG_APP_BUILD_USE_FLASH_SECTIONS=y
 # default:
 # CONFIG_APP_NO_BLOBS is not set
 # end of Build type
+
+#
+# App Update config
+#
+# end of App Update config
 
 #
 # Bootloader config
@@ -971,23 +974,6 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 
 #
-# License information
-#
-
-#
-# Copyright 2026 The PSU-EXT Authors
-#
-
-#
-# Firmware license: Apache License, Version 2.0
-#
-
-#
-# See the repository LICENSE and THIRD-PARTY-NOTICES.md files.
-#
-# end of License information
-
-#
 # Calibration
 #
 # CONFIG_PSUEXT_CAL_REQUIRE_MIN_POINTS_PER_PGA is not set
@@ -1084,16 +1070,27 @@ CONFIG_COMPILER_CXX_GLIBCXX_CONSTEXPR_NO_CHANGE=y
 #
 
 #
-# BLE Log
+# BT Logs
 #
-# default:
-# CONFIG_BLE_LOG_ENABLED is not set
-# end of BLE Log
+
+#
+# Log Sources
+#
+# end of Log Sources
 
 # default:
-# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
+# CONFIG_BT_LOG_CRITICAL_ONLY is not set
 # default:
-# CONFIG_BT_BLE_LOG_UHCI_OUT_ENABLED is not set
+# CONFIG_BLE_LOG_ENABLED is not set
+
+#
+# Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+#
+# default:
+# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
+# end of Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+# end of BT Logs
+
 # default:
 # CONFIG_BT_LE_USED_MEM_STATISTICS_ENABLED is not set
 # end of Common Options
@@ -1486,6 +1483,8 @@ CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 # CONFIG_ESP_HTTP_CLIENT_ENABLE_GET_CONTENT_RANGE is not set
 # default:
 CONFIG_ESP_HTTP_CLIENT_EVENT_POST_TIMEOUT=2000
+# default:
+# CONFIG_ESP_HTTP_CLIENT_SAVE_RESPONSE_HEADERS is not set
 # end of ESP HTTP client
 
 #
@@ -1814,6 +1813,8 @@ CONFIG_ESP_PHY_PLL_TRACK_PERIOD_MS=1000
 CONFIG_ESP_PHY_IRAM_OPT=y
 # default:
 # CONFIG_ESP_PHY_DEBUG is not set
+# default:
+CONFIG_ESP_PHY_ENABLE_VERSION_PRINT=y
 # end of PHY
 
 #
@@ -2265,6 +2266,8 @@ CONFIG_ESP_WIFI_MBEDTLS_TLS_CLIENT=y
 CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=y
 # default:
 # CONFIG_ESP_WIFI_ENT_FREE_DYNAMIC_BUFFER is not set
+# default:
+# CONFIG_ESP_WIFI_PASSIVE_HIDDEN_AP_SUPPORT is not set
 # end of Wi-Fi
 
 #
@@ -3082,8 +3085,6 @@ CONFIG_MBEDTLS_TLS_SERVER_AND_CLIENT=y
 # default:
 # CONFIG_MBEDTLS_TLS_CLIENT_ONLY is not set
 # default:
-# CONFIG_MBEDTLS_TLS_DISABLED is not set
-# default:
 # CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE is not set
 # default:
 # CONFIG_MBEDTLS_SSL_CONTEXT_SERIALIZATION is not set
@@ -3168,8 +3169,6 @@ CONFIG_MBEDTLS_CMAC_C=y
 #
 # Asymmetric Ciphers
 #
-# default:
-CONFIG_MBEDTLS_BIGNUM_C=y
 # default:
 CONFIG_MBEDTLS_RSA_C=y
 # default:
@@ -3327,6 +3326,8 @@ CONFIG_MBEDTLS_PKCS1_V21=y
 # CONFIG_NVS_ALLOCATE_CACHE_IN_SPIRAM is not set
 # default:
 # CONFIG_NVS_BDL_STACK is not set
+# default:
+# CONFIG_NVS_FLASH_VERIFY_ERASE is not set
 # end of NVS
 
 #
@@ -3632,6 +3633,8 @@ CONFIG_VFS_SUPPRESS_SELECT_DEBUG_OUTPUT=y
 # CONFIG_VFS_SUPPORT_TERMIOS is not set
 # default:
 CONFIG_VFS_MAX_COUNT=8
+# default:
+# CONFIG_VFS_SUPPRESS_CTX_DEPRECATION is not set
 
 #
 # Host File System I/O (Semihosting)
@@ -3654,6 +3657,15 @@ CONFIG_WL_SECTOR_SIZE_4096=y
 # default:
 CONFIG_WL_SECTOR_SIZE=4096
 # end of Wear Levelling
+
+#
+# cJSON
+#
+# default:
+CONFIG_CJSON_NESTING_LIMIT=1000
+# default:
+CONFIG_CJSON_CIRCULAR_LIMIT=10000
+# end of cJSON
 
 #
 # TinyUSB Stack
@@ -3773,6 +3785,33 @@ CONFIG_TINYUSB_NET_MODE_NONE=y
 CONFIG_TINYUSB_VENDOR_COUNT=0
 # end of Vendor Specific Interface
 # end of TinyUSB Stack
+
+#
+# ESP-MQTT Configurations
+#
+# default:
+CONFIG_MQTT_PROTOCOL_311=y
+# default:
+# CONFIG_MQTT_PROTOCOL_5 is not set
+# default:
+CONFIG_MQTT_TRANSPORT_SSL=y
+# default:
+CONFIG_MQTT_TRANSPORT_WEBSOCKET=y
+# default:
+CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE=y
+# default:
+# CONFIG_MQTT_MSG_ID_INCREMENTAL is not set
+# default:
+# CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED is not set
+# default:
+# CONFIG_MQTT_REPORT_DELETED_MESSAGES is not set
+# default:
+# CONFIG_MQTT_USE_CUSTOM_CONFIG is not set
+# default:
+# CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED is not set
+# default:
+# CONFIG_MQTT_CUSTOM_OUTBOX is not set
+# end of ESP-MQTT Configurations
 # end of Component config
 
 # default:

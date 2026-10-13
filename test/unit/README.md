@@ -22,6 +22,9 @@ idf.py set-target esp32s3
 idf.py build
 ```
 
+`TEST_COMPONENTS` is a CMake cache variable. After a component is added to it,
+run `idf.py fullclean` (or delete `build/`) so an existing build picks it up.
+
 ## Flash And Run
 
 Replace `<PORT>` with the ESP32-S3 serial port, for example `COM7`.
@@ -42,6 +45,13 @@ test with any one of these inputs:
 ```
 
 The `*` command runs all registered tests.
+
+Other useful selectors:
+
+| Selector | Covers |
+|---|---|
+| `[output]` | `OUTP` regression tests. These switch the CH1 relay; disconnect the load. |
+| `[mqtt]` | `mqtt_svc` aggregation, formatting, payloads, filters, validation, and `SYST:MQTT:*` SCPI. |
 
 Exit the monitor with `Ctrl+]`.
 
