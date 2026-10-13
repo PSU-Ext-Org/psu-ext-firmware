@@ -27,6 +27,12 @@
 
 static const char *TAG = "scpi_handler";
 
+static bool scpi_handler_keyword_is_secret(const char *keyword_upper)
+{
+    const size_t length = strlen(keyword_upper);
+    return (strstr(keyword_upper, ":PASS") != NULL) && (length > 0U) && (keyword_upper[length - 1U] != '?');
+}
+
 void scpi_handler_handle_command(
     char *command,
     const scpi_handler_response_writer_t *writer)
@@ -45,11 +51,17 @@ void scpi_handler_handle_command(
         return;
     }
 
-    ESP_LOGI(TAG, "SCPI RX: %s", command);
-
     scpi_handler_parse_command(command, &parsed);
     strlcpy(keyword_upper, parsed.keyword, sizeof(keyword_upper));
     scpi_handler_uppercase(keyword_upper);
+
+    ESP_LOGI(
+        TAG,
+        "SCPI RX: %s%s%s",
+        parsed.keyword,
+        parsed.argument != NULL ? " " : "",
+        parsed.argument == NULL ? "" :
+            (scpi_handler_keyword_is_secret(keyword_upper) ? "***" : parsed.argument));
 
     if (strcmp(keyword_upper, "*IDN?") == 0) {
         write_response(SCPI_HANDLER_IDN_RESPONSE);
@@ -63,7 +75,8 @@ void scpi_handler_handle_command(
         scpi_handler_handle_protection_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_timer_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_trigger_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_wifi_command(keyword_upper, &parsed, write_response)) {
+        scpi_handler_handle_wifi_command(keyword_upper, &parsed, write_response) ||
+        scpi_handler_handle_mqtt_command(keyword_upper, &parsed, write_response)) {
         return;
     }
 
