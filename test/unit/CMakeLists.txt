@@ -21,8 +21,8 @@ set(EXTRA_COMPONENT_DIRS
     "$ENV{IDF_PATH}/components/unity/test_apps/main"
 )
 
-set(COMPONENTS main measure_svc scpi_handler esp_psram)
-set(TEST_COMPONENTS measure_svc scpi_handler CACHE STRING "List of psu-ext components with target tests")
+set(COMPONENTS main measure_svc mqtt_svc scpi_handler esp_psram)
+set(TEST_COMPONENTS measure_svc mqtt_svc scpi_handler CACHE STRING "List of psu-ext components with target tests")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 idf_build_set_property(MINIMAL_BUILD ON)
