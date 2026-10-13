@@ -245,6 +245,58 @@ RESET:PROTect CH1
 
 `isConnected` is `1` when connected and `0` otherwise. `connTime` is in seconds.
 
+## MQTT / Home Assistant
+
+The MQTT client is disabled by default. It connects only when enabled, a broker
+URI is set, and Wi-Fi has an IP address. Every setting is stored in NVS
+(namespace `mqtt_cfg`) and applied immediately; a running client reconnects
+with the new settings without a reboot. String arguments may be wrapped in
+double quotes; quotes inside a value are not supported. Long forms
+(`SYSTEM:MQTT:...`, `ENABLE`, `INTERVAL`, `PREFIX`, `PASSWORD`, `STATUS?`) are
+also accepted.
+
+| Command | Response | Notes |
+|---|---|---|
+| `SYST:MQTT:URI "<uri>"` | none | Broker URI. Scheme must be `mqtt://` or `mqtts://`, followed by a host and optional `:port`. Credentials embedded as `user:pass@` are rejected; use `USER`/`PASS`. Max 96 characters. |
+| `SYST:MQTT:URI?` | `"<uri>"` | |
+| `SYST:MQTT:USER "<user>"` | none | Optional username. `""` clears it. Max 64 characters. |
+| `SYST:MQTT:USER?` | `"<user>"` | |
+| `SYST:MQTT:PASS "<pass>"` | none | Write-only. Never echoed in responses or logs. `""` clears it. Max 64 characters. |
+| `SYST:MQTT:PASS?` | `SET` or `EMPTY` | Does not reveal the password. |
+| `SYST:MQTT:ENAB <0\|1>` | none | Enables or disables the client. |
+| `SYST:MQTT:ENAB?` | `0` or `1` | |
+| `SYST:MQTT:INT <ms>` | none | Telemetry interval, `200`..`3600000`. Default `1000`. |
+| `SYST:MQTT:INT?` | `<ms>` | |
+| `SYST:MQTT:PREF "<prefix>"` | none | Home Assistant discovery prefix. Default `homeassistant`. Letters, digits, `_`, `-`, and `/` between levels; max 32 characters. |
+| `SYST:MQTT:PREF?` | `"<prefix>"` | |
+| `SYST:MQTT:STAT?` | `<state>,"<client_id>","<last_error>"` | Runtime status, for example `CONNECTED,"psu_ext_a1b2c3",""` or `ERROR,"psu_ext_a1b2c3","auth failed"`. |
+
+`STAT?` states:
+
+| State | Meaning |
+|---|---|
+| `DISABLED` | `ENAB` is `0`. |
+| `WAIT_WIFI` | Enabled, waiting for a Wi-Fi IP address. |
+| `CONNECTING` | Client started, not yet connected. |
+| `CONNECTED` | Connected; discovery and state are published. |
+| `ERROR` | No broker URI, or the last connection attempt failed. The client keeps retrying every 5 s. |
+
+Typical setup:
+
+```text
+WIFI:SSID MyNetwork
+WIFI:PASS MyWifiPassword
+SYST:MQTT:URI "mqtt://192.168.1.10:1883"
+SYST:MQTT:USER "psu"
+SYST:MQTT:PASS "broker-password"
+SYST:MQTT:ENAB 1
+SYST:MQTT:STAT?
+```
+
+`mqtts://` brokers are verified against the ESP-IDF certificate bundle (public
+CAs). Self-signed broker certificates are not supported yet. See
+[Home Assistant integration](home-assistant.md) for topics and entities.
+
 ## Error Responses
 
 Unknown commands return:

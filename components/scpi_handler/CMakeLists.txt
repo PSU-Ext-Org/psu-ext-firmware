@@ -18,6 +18,7 @@ idf_component_register(
         "scpi_handler_calibration.c"
         "scpi_handler_common.c"
         "scpi_handler_measure.c"
+        "scpi_handler_mqtt.c"
         "scpi_handler_output.c"
         "scpi_handler_protection.c"
         "scpi_handler_system.c"
@@ -25,5 +26,5 @@ idf_component_register(
         "scpi_handler_trigger.c"
         "scpi_handler_wifi.c"
     INCLUDE_DIRS "include"
-    REQUIRES freertos wifi_manager measure_svc output_ctrl protection_svc trigger_svc timer_svc timebase_svc
+    REQUIRES freertos wifi_manager mqtt_svc measure_svc output_ctrl protection_svc trigger_svc timer_svc timebase_svc
 )
