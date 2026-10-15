@@ -8,3 +8,7 @@
 build
 managed_components
 release-notices
+
+# ESP-IDF generated configuration; commit sdkconfig.defaults instead.
+sdkconfig
+sdkconfig.old

@@ -59,6 +59,25 @@ From this directory, build the firmware with:
 idf.py build
 ```
 
+`sdkconfig.defaults` contains the reviewed board and application settings.
+ESP-IDF generates the ignored `sdkconfig` locally; `sdkconfig.old` is ignored too.
+An existing `sdkconfig` takes precedence over defaults. To adopt changed defaults,
+back up any local overrides, remove `sdkconfig`, and run `idf.py reconfigure`.
+Use `idf.py menuconfig` for local changes and `idf.py save-defconfig` to extract
+overrides for review before updating the tracked defaults.
+
+The defaults select ESP32-S3, 16 MB flash in DIO mode at 80 MHz, the large
+single-app partition, and the external RTC crystal. Octal PSRAM runs at 80 MHz
+with boot-time capacity detection, memory testing, and ECC. On the 16 MB PSRAM
+device, ECC reserves 1 MB; PSRAM allocations use the explicit capabilities API.
+USB CDC uses DMA and 512-byte RX, TX, and endpoint buffers. Wi-Fi is enabled
+with ESP-IDF's default network settings. The existing calibration policy is
+preserved. Application logging defaults to INFO, with DEBUG and VERBOSE disabled.
+The interrupt watchdog retains its existing 300 ms timeout.
+
+The separate `test/unit/sdkconfig.defaults` configures the Unity runner and its
+USB Serial/JTAG console. Its generated configuration is also ignored.
+
 ## License
 
 Copyright 2026 The PSU-EXT Authors.
