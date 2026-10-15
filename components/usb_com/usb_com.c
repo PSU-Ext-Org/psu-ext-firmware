@@ -39,7 +39,7 @@
 #include "status_led.h"
 #include "tinyusb.h"
 #include "tusb.h"
-#include "tusb_cdc_acm.h"
+#include "tinyusb_cdc_acm.h"
 #include "tinyusb_default_config.h"
 
 #define USB_COM_CDC_PORT TINYUSB_CDC_ACM_0
@@ -391,7 +391,7 @@ esp_err_t usb_com_init(void)
         .callback_line_state_changed = usb_com_line_state_changed_callback,
     };
 
-    err = tusb_cdc_acm_init(&acm_cfg);
+    err = tinyusb_cdcacm_init(&acm_cfg);
     if (err != ESP_OK) {
         status_led_set_usb_connected(false);
         status_led_set_usb_failed(true);
