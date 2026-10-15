@@ -313,7 +313,6 @@ esp_err_t trigger_config_bind(
     const char *arguments)
 {
     trigger_config_mapping_t new_mapping;
-    trigger_config_mapping_t old_mapping;
     const trigger_action_t *old_action;
     const trigger_action_t *new_action;
     trigger_svc_pin_t pin;
@@ -341,7 +340,6 @@ esp_err_t trigger_config_bind(
         TAG,
         "invalid trigger function or arguments");
 
-    old_mapping = s_trigger_config.current[trigger_index][state_index];
     ESP_RETURN_ON_ERROR(
         trigger_svc_get_action(pin, state, &old_action),
         TAG,
