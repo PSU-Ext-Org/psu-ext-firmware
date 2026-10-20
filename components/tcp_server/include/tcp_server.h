@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -31,15 +33,16 @@ extern "C" {
  * @brief Initialize the WiFi TCP server task.
  *
  * The server waits for WiFi connectivity, listens on TCP port `5025`, accepts
- * a single client at a time, and currently echoes received bytes back to the
- * connected peer. The task remains running so the transport can later be
- * upgraded from echo to SCPI handling without changing startup flow.
+ * a single client at a time, and dispatches SCPI commands from the connected peer.
  *
  * @return
  * - `ESP_OK` if the server task was started
  * - `ESP_ERR_NO_MEM` if the task could not be created
  */
 esp_err_t tcp_server_init(void);
+
+/** True while an accepted SCPI client is active and WiFi has an IP address. */
+bool tcp_server_session_is_active(void);
 
 #ifdef __cplusplus
 }

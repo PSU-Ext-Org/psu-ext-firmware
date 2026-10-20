@@ -96,3 +96,10 @@ Observed on 2026-07-15 with `COM8`:
 14 Tests 0 Failures 0 Ignored
 OK
 ```
+
+## Display Tests
+
+Enable `PSU-EXT configuration > External I2C modules > SSD1306 128x64 OLED display`
+in this test application's `idf.py menuconfig`, then build and select `[display]`
+in the Unity runner. An attached display is not required for these tests.
+When this option is disabled, display implementation and test sources are omitted.

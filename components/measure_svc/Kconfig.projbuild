@@ -38,4 +38,26 @@ config PSUEXT_CAL_MIN_POINTS_PER_PGA
 
 endmenu
 
+menu "External I2C modules"
+
+# Every implemented external module selects this hidden bus requirement.
+config PSUEXT_I2C_1_ENABLED
+    bool
+    help
+        Internal flag selected by external modules that require I2C controller 1.
+        The bus is created only when at least one implemented module is enabled.
+
+config PSUEXT_I2C_1_SSD1306
+    bool "SSD1306 128x64 OLED display"
+    default n
+    select PSUEXT_I2C_1_ENABLED
+    help
+        Compile support for an optional measurement display on external I2C
+        controller 1 (SDA GPIO6, SCL GPIO7). Disabled builds omit the driver.
+        A missing or failed display does not prevent normal firmware startup.
+
+comment "MLX90614 temperature sensor (not implemented)"
+
+endmenu
+
 endmenu

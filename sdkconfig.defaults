@@ -35,3 +35,6 @@ CONFIG_PSUEXT_CAL_REQUIRE_MIN_POINTS_PER_PGA=n
 # Keep normal operational logs; compile out debug and verbose logging.
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_EQUALS_DEFAULT=y
+
+# External I2C modules are opt-in.
+CONFIG_PSUEXT_I2C_1_SSD1306=n

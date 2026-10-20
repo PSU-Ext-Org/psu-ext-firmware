@@ -16,4 +16,5 @@ idf_component_register(
     SRCS "tcp_server.c"
     INCLUDE_DIRS "include"
     REQUIRES esp_netif scpi_handler wifi_manager
+    PRIV_REQUIRES esp_event esp_wifi
 )

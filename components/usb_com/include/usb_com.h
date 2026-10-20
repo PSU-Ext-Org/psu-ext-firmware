@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include "esp_err.h"
 
 /**
@@ -37,3 +39,13 @@
  * - An ESP-IDF error code if TinyUSB or CDC initialization fails
  */
 esp_err_t usb_com_init(void);
+
+/** Thread-safe USB snapshot: mounted by host and CDC DTR asserted.
+ * Both are false before startup and after detach/unmount or initialization failure.
+ */
+typedef struct {
+    bool mounted;
+    bool cdc_open;
+} usb_com_status_t;
+
+usb_com_status_t usb_com_get_status(void);

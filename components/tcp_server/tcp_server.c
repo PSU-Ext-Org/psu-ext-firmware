@@ -27,8 +27,10 @@
 #include <string.h>
 
 #include "esp_check.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
@@ -45,6 +47,38 @@
 #define TCP_SERVER_RX_BUFFER_SIZE 256
 #define TCP_SERVER_COMMAND_BUFFER_SIZE 128
 #define TCP_SERVER_CTRL_C_GRACE_PERIOD_MS 1000U
+
+static portMUX_TYPE s_session_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool s_session_active;
+
+static void tcp_server_set_session_active(bool active)
+{
+    portENTER_CRITICAL(&s_session_lock);
+    s_session_active = active;
+    portEXIT_CRITICAL(&s_session_lock);
+}
+
+static void tcp_server_wifi_lost(void *argument, esp_event_base_t base, int32_t id, void *event)
+{
+    (void)argument;
+    (void)base;
+    (void)id;
+    (void)event;
+    /* Keep an old client from appearing active after a quick WiFi reconnect. */
+    tcp_server_set_session_active(false);
+}
+
+bool tcp_server_session_is_active(void)
+{
+    wifi_manager_state_t wifi;
+    if (wifi_manager_get_state(&wifi) != ESP_OK || !wifi.is_connected) {
+        return false;
+    }
+    portENTER_CRITICAL(&s_session_lock);
+    bool active = s_session_active;
+    portEXIT_CRITICAL(&s_session_lock);
+    return active;
+}
 
 static const char *TAG = "tcp_server";
 
@@ -176,6 +210,7 @@ static void tcp_server_write_response(const char *response)
             response_length - tx_offset,
             0);
         if (tx_length <= 0) {
+            tcp_server_set_session_active(false);
             ESP_LOGW(TAG, "send() failed while writing response: errno=%d", errno);
             return;
         }
@@ -188,6 +223,7 @@ static void tcp_server_write_response(const char *response)
             line_ending,
             sizeof(line_ending) - 1U,
             0) <= 0) {
+        tcp_server_set_session_active(false);
         ESP_LOGW(TAG, "send() failed while writing line ending: errno=%d", errno);
     }
 }
@@ -206,6 +242,7 @@ static void tcp_server_write_binary_response(const uint8_t *data, size_t length)
             length - tx_offset,
             0);
         if (tx_length <= 0) {
+            tcp_server_set_session_active(false);
             ESP_LOGW(TAG, "send() failed while writing binary response: errno=%d", errno);
             return;
         }
@@ -231,6 +268,7 @@ static void tcp_server_handle_client(int client_socket)
     };
 
     s_tcp_server_client.active_client_socket = client_socket;
+    tcp_server_set_session_active(true);
 
     if (setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
         ESP_LOGW(TAG, "setsockopt(SO_RCVTIMEO) failed: errno=%d", errno);
@@ -239,8 +277,8 @@ static void tcp_server_handle_client(int client_socket)
     for (;;) {
         int rx_length;
 
-        if (!tcp_server_is_wifi_connected()) {
-            ESP_LOGW(TAG, "Closing client because WiFi disconnected");
+        if (!tcp_server_session_is_active()) {
+            ESP_LOGW(TAG, "Closing inactive client session");
             break;
         }
 
@@ -268,6 +306,7 @@ static void tcp_server_handle_client(int client_socket)
                 if (ctrl_c_seen && ctrl_c_only) {
                     ESP_LOGI(TAG, "Received standalone Ctrl+C, closing client connection");
                     s_tcp_server_client.active_client_socket = -1;
+                    tcp_server_set_session_active(false);
                     return;
                 }
             }
@@ -333,6 +372,7 @@ static void tcp_server_handle_client(int client_socket)
     }
 
     s_tcp_server_client.active_client_socket = -1;
+    tcp_server_set_session_active(false);
 }
 
 /**
@@ -394,6 +434,24 @@ esp_err_t tcp_server_init(void)
     }
 
     s_tcp_server_client.active_client_socket = -1;
+    tcp_server_set_session_active(false);
+
+    /* WiFi startup skips event-loop creation when credentials are absent.
+     * Status handlers must also work on a fresh, unconfigured device. */
+    esp_err_t err = esp_event_loop_create_default();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        return err;
+    }
+    err = esp_event_handler_register(
+        WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, tcp_server_wifi_lost, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_LOST_IP, tcp_server_wifi_lost, NULL);
+    if (err != ESP_OK) {
+        esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, tcp_server_wifi_lost);
+        return err;
+    }
 
     BaseType_t task_created = xTaskCreate(
         tcp_server_task,
@@ -403,7 +461,11 @@ esp_err_t tcp_server_init(void)
         TCP_SERVER_TASK_PRIORITY,
         &s_tcp_server.task_handle);
 
-    ESP_RETURN_ON_FALSE(task_created == pdPASS, ESP_ERR_NO_MEM, TAG, "tcp server task creation failed");
+    if (task_created != pdPASS) {
+        esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, tcp_server_wifi_lost);
+        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_LOST_IP, tcp_server_wifi_lost);
+        return ESP_ERR_NO_MEM;
+    }
 
     s_tcp_server.initialized = true;
     ESP_LOGI(TAG, "TCP server initialized");

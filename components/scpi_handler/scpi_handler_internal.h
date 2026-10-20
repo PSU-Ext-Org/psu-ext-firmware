@@ -44,6 +44,12 @@ typedef struct {
     char *argument;
 } scpi_handler_parsed_command_t;
 
+/* Match normalized keywords; invoke callbacks without holding the registry lock. */
+bool scpi_handler_dispatch_registered_command(
+    const char *keyword,
+    const char *argument,
+    const scpi_handler_response_writer_t *writer);
+
 /**
  * @brief Remove leading and trailing whitespace from a mutable string.
  *
