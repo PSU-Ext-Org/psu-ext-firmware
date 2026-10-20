@@ -46,3 +46,8 @@ esp_err_t measure_svc_history_copy_samples(
 esp_err_t measure_svc_history_copy_latest_samples(
     measure_channel_t channel, measure_kind_t kind, size_t max_count,
     measure_svc_sample_t *samples, size_t *copied_count);
+
+/** @brief Average signed fractional newest samples atomically; convert once to unsigned u4. */
+esp_err_t measure_svc_history_average_latest(
+    measure_channel_t channel, measure_kind_t kind, size_t max_count,
+    uint32_t *value_u4);

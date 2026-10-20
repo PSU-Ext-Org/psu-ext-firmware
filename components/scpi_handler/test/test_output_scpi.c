@@ -20,6 +20,7 @@
  */
 
 #include "measure_svc.h"
+#include "measure_svc_samples.h"
 #include "output_ctrl.h"
 #include "protection_svc.h"
 #include "scpi_handler.h"

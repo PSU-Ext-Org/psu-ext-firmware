@@ -29,6 +29,8 @@
 #include "nvs_flash.h"
 #include "unity.h"
 
+#define TEST_CAPTURE_SAMPLES 16U
+
 #define CAL_NVS_NAMESPACE "meas_cfg"
 #define CAL_NVS_KEY_V_CH0 "cal_v_ch0"
 #define CAL_NVS_KEY_I_CH1 "cal_i_ch1"
@@ -62,6 +64,8 @@ static void ensure_measure_runtime(void)
         .output_current_input = MEASURE_INPUT_ADS1115_AIN2,
     };
     TEST_ESP_OK(measure_svc_init_with_config(&config));
+    TEST_ESP_OK(measure_svc_set_average_count(MEASURE_KIND_VOLTAGE, TEST_CAPTURE_SAMPLES));
+    TEST_ESP_OK(measure_svc_set_average_count(MEASURE_KIND_CURRENT, TEST_CAPTURE_SAMPLES));
     initialized = true;
 }
 
@@ -122,7 +126,7 @@ static esp_err_t capture_point_with_raw(
     const int16_t raw_code = (int16_t)(((uint64_t)raw_u4 * 32768U +
         (full_scale_u4 / 2U)) / full_scale_u4);
     for (uint8_t i = 0U;
-         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + TEST_CAPTURE_SAMPLES);
          ++i) {
         const measure_svc_sample_event_t event = {
             .channel = channel,
@@ -131,6 +135,7 @@ static esp_err_t capture_point_with_raw(
             .raw_value_u4 = raw_u4,
             .raw_code = raw_code,
             .pga_full_scale_mv = pga_full_scale_mv,
+            .precise_u4 = raw_u4,
             .value_u4 = raw_u4,
         };
         measure_svc_event_bus_publish(&event);
@@ -159,6 +164,7 @@ static void store_calibration_raw_code(
         .raw_value_u4 = raw_u4,
         .raw_code = raw_code,
         .pga_full_scale_mv = 2048U,
+        .precise_u4 = raw_u4,
         .value_u4 = raw_u4,
     };
     measure_svc_event_bus_publish(&event);
@@ -285,7 +291,7 @@ TEST_CASE("calibration stale capture cannot publish after abort", "[calibration]
     vTaskDelay(pdMS_TO_TICKS(50U));
     TEST_ESP_OK(measure_svc_calibration_abort());
     for (uint8_t i = 0U;
-         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + MEASURE_SVC_CAL_CAPTURE_WINDOW_SAMPLES);
+         i < (MEASURE_SVC_CAL_CAPTURE_DISCARD_SAMPLES + TEST_CAPTURE_SAMPLES);
          ++i) {
         store_calibration_raw_code(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1, 1974);
     }
@@ -304,12 +310,12 @@ TEST_CASE("calibration startup loads range-aware blobs and independently default
     const measure_svc_cal_table_t valid = {
         .count = 6U,
         .points = {
-            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 256U},
-            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 512U},
-            {.raw_code = 10, .actual_u4 = 100U, .pga_full_scale_mv = 2048U},
-            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 256U},
-            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 512U},
-            {.raw_code = 20, .actual_u4 = 200U, .pga_full_scale_mv = 2048U},
+            {.raw_code_q16 = (10) * 65536, .actual_u4 = 100U, .pga_full_scale_mv = 256U},
+            {.raw_code_q16 = (10) * 65536, .actual_u4 = 100U, .pga_full_scale_mv = 512U},
+            {.raw_code_q16 = (10) * 65536, .actual_u4 = 100U, .pga_full_scale_mv = 2048U},
+            {.raw_code_q16 = (20) * 65536, .actual_u4 = 200U, .pga_full_scale_mv = 256U},
+            {.raw_code_q16 = (20) * 65536, .actual_u4 = 200U, .pga_full_scale_mv = 512U},
+            {.raw_code_q16 = (20) * 65536, .actual_u4 = 200U, .pga_full_scale_mv = 2048U},
         },
     };
     TEST_ESP_OK(measure_svc_cal_persistence_store(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &valid));

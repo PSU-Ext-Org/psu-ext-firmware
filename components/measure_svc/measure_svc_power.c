@@ -23,6 +23,7 @@
 #include "measure_svc_core.h"
 #include "measure_svc_event_bus.h"
 #include "measure_svc_samples.h"
+#include "measure_svc_precision.h"
 
 static const char *TAG = "measure_power";
 
@@ -34,20 +35,17 @@ typedef struct {
 static pending_input_t s_voltage;
 static pending_input_t s_current;
 
-static uint32_t calculate_power_u4(uint32_t voltage_u4, uint32_t current_u4)
-{
-    return (uint32_t)((((uint64_t)voltage_u4 * current_u4) + 5000ULL) / 10000ULL);
-}
-
 static void emit_power(const measure_svc_sample_event_t *latest)
 {
     const measure_svc_config_t *config = measure_svc_core_get_config();
+    const double precise = s_voltage.event.precise_u4 * s_current.event.precise_u4 / 10000.0;
     const measure_svc_sample_event_t event = {
         .kind = MEASURE_KIND_POWER,
         .channel = MEASURE_CHANNEL_1,
         .physical_input = config->output_current_input,
         .time_ms = latest->time_ms,
-        .value_u4 = calculate_power_u4(s_voltage.event.value_u4, s_current.event.value_u4),
+        .precise_u4 = precise,
+        .value_u4 = measure_svc_precision_to_u4(precise),
     };
     measure_svc_event_bus_publish(&event);
     s_voltage.valid = false;

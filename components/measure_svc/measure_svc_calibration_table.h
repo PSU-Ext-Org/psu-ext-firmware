@@ -65,11 +65,16 @@ bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table);
  */
 void measure_svc_cal_table_invalidate_cache(measure_svc_cal_table_t *table);
 
+/** @brief Apply calibration without rounding or clamping signed fractional u4. */
+bool measure_svc_cal_table_apply_precise_u4(
+    measure_svc_cal_table_t *table, int16_t raw_code,
+    uint16_t pga_full_scale_mv, double *actual_u4);
+
 /**
  * @brief Apply the matching PGA subset of a validated calibration table.
  *
  * The function performs piecewise-linear interpolation or endpoint-segment
- * extrapolation, rounds half away from zero, and saturates to uint32_t. A
+ * extrapolation, rounds positive halves upward, and saturates to uint32_t. A
  * successful call may update the table's runtime segment cache.
  *
  * @param table Calibration table and runtime lookup cache.

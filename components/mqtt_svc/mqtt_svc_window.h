@@ -31,9 +31,9 @@ extern "C" {
 #endif
 
 typedef struct {
-    uint64_t sum_u4;
-    uint32_t min_u4;
-    uint32_t max_u4;
+    double sum_u4;
+    double min_u4;
+    double max_u4;
     uint32_t count;
 } mqtt_svc_window_stat_t;
 
@@ -56,8 +56,8 @@ typedef struct {
 /** @brief Clear all accumulated samples. */
 void mqtt_svc_window_reset(mqtt_svc_window_t *window);
 
-/** @brief Accumulate one calibrated CH1 sample of the given kind. */
-void mqtt_svc_window_add(mqtt_svc_window_t *window, measure_kind_t kind, uint32_t value_u4);
+/** @brief Accumulate one signed fractional u4 CH1 sample of the given kind. */
+void mqtt_svc_window_add(mqtt_svc_window_t *window, measure_kind_t kind, double precise_u4);
 
 /**
  * @brief Reduce the window to means and extremes.
