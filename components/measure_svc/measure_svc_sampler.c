@@ -27,6 +27,7 @@
 #include "measure_svc.h"
 #include "measure_svc_calibration_runtime.h"
 #include "measure_svc_core.h"
+#include "measure_svc_precision.h"
 #include "measure_svc_event_bus.h"
 
 #define TASK_STACK_WORDS 4096U
@@ -81,6 +82,8 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
     }
     s_last_published_generation[(size_t)input] = source_generation;
 
+    const double precise = measure_svc_calibration_apply_target_precise_u4(
+        kind, channel, raw_code, pga_full_scale_mv);
     const measure_svc_sample_event_t event = {
         .kind = kind,
         .channel = channel,
@@ -90,8 +93,8 @@ static void sample_input(measure_channel_t channel, measure_input_t input, measu
         .raw_code = raw_code,
         .source_generation = source_generation,
         .pga_full_scale_mv = pga_full_scale_mv,
-        .value_u4 = measure_svc_calibration_apply_target_u4(
-            kind, channel, raw_code, pga_full_scale_mv),
+        .precise_u4 = precise,
+        .value_u4 = measure_svc_precision_to_u4(precise),
     };
     measure_svc_event_bus_publish(&event);
 }

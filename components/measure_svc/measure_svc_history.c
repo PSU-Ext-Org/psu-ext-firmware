@@ -15,6 +15,7 @@
  */
 
 #include "measure_svc_history.h"
+#include "measure_svc_precision.h"
 
 #include <stddef.h>
 
@@ -27,7 +28,12 @@
 static const char *TAG = "measure_history";
 
 typedef struct {
-    measure_svc_sample_t *samples;
+    uint32_t time_ms;
+    double precise_u4;
+} precise_sample_t;
+
+typedef struct {
+    precise_sample_t *samples;
     size_t capacity;
     size_t write_index;
     size_t count;
@@ -85,7 +91,7 @@ esp_err_t measure_svc_history_init(void)
         if (s_rings[i].samples == NULL) {
             s_rings[i].samples = heap_caps_calloc(
                 s_rings[i].capacity,
-                sizeof(measure_svc_sample_t),
+                sizeof(precise_sample_t),
                 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (s_rings[i].samples == NULL) {
                 free_rings();
@@ -95,7 +101,7 @@ esp_err_t measure_svc_history_init(void)
     }
 
     ESP_LOGI(TAG, "sample rings allocated in PSRAM: %u bytes total",
-        (unsigned)(4U * MEASURE_SVC_MAX_SAMPLE_CAPACITY * sizeof(measure_svc_sample_t)));
+        (unsigned)(4U * MEASURE_SVC_MAX_SAMPLE_CAPACITY * sizeof(precise_sample_t)));
     return ESP_OK;
 }
 
@@ -111,9 +117,9 @@ static void history_listener(const measure_svc_sample_event_t *event, void *cont
 
     measure_svc_sample_ring_t *ring = &s_rings[index];
     if (ring->samples != NULL) {
-        ring->samples[ring->write_index] = (measure_svc_sample_t){
+        ring->samples[ring->write_index] = (precise_sample_t){
             .time_ms = event->time_ms,
-            .value_u4 = event->value_u4,
+            .precise_u4 = event->precise_u4,
         };
         ring->write_index = (ring->write_index + 1U) % ring->capacity;
         if (ring->count < ring->capacity) {
@@ -161,7 +167,11 @@ esp_err_t measure_svc_history_copy_samples(
         }
         const size_t oldest = (ring->write_index + ring->capacity - ring->count) % ring->capacity;
         for (size_t i = 0; i < count; ++i) {
-            samples[i] = ring->samples[(oldest + start_offset + i) % ring->capacity];
+            const precise_sample_t *sample = &ring->samples[(oldest + start_offset + i) % ring->capacity];
+            samples[i] = (measure_svc_sample_t){
+                .time_ms = sample->time_ms,
+                .value_u4 = measure_svc_precision_to_u4(sample->precise_u4),
+            };
         }
         *copied_count = count;
     }
@@ -221,4 +231,37 @@ esp_err_t measure_svc_copy_power_samples(
     }
     return measure_svc_history_copy_samples(
         channel, MEASURE_KIND_POWER, start_offset, max_count, samples, copied_count);
+}
+
+/* Selection and accumulation share one lock so concurrent publications cannot
+ * shift the requested window. No shared scratch storage is needed. */
+esp_err_t measure_svc_history_average_latest(
+    measure_channel_t channel, measure_kind_t kind, size_t max_count,
+    uint32_t *value_u4)
+{
+    size_t index;
+    if (value_u4 == NULL || max_count == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ESP_RETURN_ON_ERROR(slot_index(channel, kind, &index), TAG, "invalid history slot");
+    if (s_history_lock == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (xSemaphoreTake(s_history_lock, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    const measure_svc_sample_ring_t *ring = &s_rings[index];
+    const size_t count = ring->count < max_count ? ring->count : max_count;
+    if (count == 0U) {
+        xSemaphoreGive(s_history_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+    const size_t start = (ring->write_index + ring->capacity - count) % ring->capacity;
+    double total = 0.0;
+    for (size_t i = 0U; i < count; ++i) {
+        total += ring->samples[(start + i) % ring->capacity].precise_u4;
+    }
+    *value_u4 = measure_svc_precision_to_u4(total / (double)count);
+    xSemaphoreGive(s_history_lock);
+    return ESP_OK;
 }

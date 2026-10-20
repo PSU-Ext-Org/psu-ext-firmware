@@ -193,3 +193,18 @@ The Unity device image is successful when the menu command `*` reports:
 
 Build the production firmware from the repository root in the configured
 ESP-IDF PowerShell environment with `idf.py build`.
+
+### Signed precision and unsigned boundaries
+
+Calibration produces signed fractional `double` values in u4 units (`1.0` is
+0.0001 V, A, or W). Sample producers populate `precise_u4` and the matching
+`value_u4` projection using `measure_svc_precision_to_u4()`. History, read
+averages, power calculation, and MQTT aggregation consume `precise_u4`.
+Power remains the mean of paired sample products, not a product of means.
+
+Protection consumes the immediate unsigned `value_u4`. Public history copies,
+read results, and MQTT summaries round positive halves upward and clamp to
+0..UINT32_MAX. Negative samples therefore cancel positive noise before an
+average is converted. NaN converts to zero; positive infinity saturates;
+negative infinity converts to zero. Calibration blobs and public wire formats
+are unchanged. The private history ring uses additional PSRAM for doubles.

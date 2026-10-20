@@ -26,6 +26,7 @@
 
 #include "sdkconfig.h"
 #include "measure_provider.h"
+#include "measure_svc_precision.h"
 
 bool measure_svc_cal_table_validate(const measure_svc_cal_table_t *table)
 {
@@ -121,11 +122,11 @@ static bool measure_svc_cal_table_find_segment(
     return false;
 }
 
-bool measure_svc_cal_table_apply_u4(
+bool measure_svc_cal_table_apply_precise_u4(
     measure_svc_cal_table_t *table,
     int16_t raw_code,
     uint16_t pga_full_scale_mv,
-    uint32_t *actual_u4)
+    double *actual_u4)
 {
     if ((actual_u4 == NULL) || !measure_svc_cal_table_validate(table)) {
         return false;
@@ -150,28 +151,22 @@ bool measure_svc_cal_table_apply_u4(
         return true;
     }
 
-    const int64_t raw_span = (int64_t)point1->raw_code_q16 - (int64_t)point0->raw_code_q16;
-    const int64_t actual_span = (int64_t)point1->actual_u4 - (int64_t)point0->actual_u4;
-    const int64_t raw_delta = x - (int64_t)point0->raw_code_q16;
-    /* The two factors are bounded below 2^32.  Divide first and retain the
-     * remainder, so no intermediate needs wider-than-64-bit arithmetic. */
-    const uint64_t delta_magnitude = raw_delta < 0 ? (uint64_t)-raw_delta : (uint64_t)raw_delta;
-    const uint64_t actual_magnitude = actual_span < 0 ? (uint64_t)-actual_span : (uint64_t)actual_span;
-    const uint64_t denominator = (uint64_t)raw_span;
-    const uint64_t whole = delta_magnitude / denominator;
-    const uint64_t remainder = delta_magnitude % denominator;
-    const uint64_t fractional = (remainder * actual_magnitude + denominator / 2U) / denominator;
-    const uint64_t magnitude = whole * actual_magnitude + fractional;
-    const bool negative = (raw_delta < 0) != (actual_span < 0);
-    if (negative) {
-        *actual_u4 = magnitude >= point0->actual_u4 ?
-            0U :
-            point0->actual_u4 - (uint32_t)magnitude;
-    } else if (magnitude > (uint64_t)UINT32_MAX - point0->actual_u4) {
-        *actual_u4 = UINT32_MAX;
-    } else {
-        *actual_u4 = point0->actual_u4 + (uint32_t)magnitude;
-    }
+    const double raw_span = (double)point1->raw_code_q16 - point0->raw_code_q16;
+    const double actual_span = (double)point1->actual_u4 - point0->actual_u4;
+    const double raw_delta = (double)x - point0->raw_code_q16;
+    *actual_u4 = point0->actual_u4 + raw_delta * actual_span / raw_span;
+    return true;
+}
 
+bool measure_svc_cal_table_apply_u4(
+    measure_svc_cal_table_t *table, int16_t raw_code,
+    uint16_t pga_full_scale_mv, uint32_t *actual_u4)
+{
+    double precise;
+    if (actual_u4 == NULL || !measure_svc_cal_table_apply_precise_u4(
+            table, raw_code, pga_full_scale_mv, &precise)) {
+        return false;
+    }
+    *actual_u4 = measure_svc_precision_to_u4(precise);
     return true;
 }

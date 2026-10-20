@@ -20,11 +20,12 @@
  */
 
 #include "mqtt_svc_window.h"
+#include "measure_svc_precision.h"
 
 #include <stddef.h>
 #include <string.h>
 
-static void mqtt_svc_window_stat_add(mqtt_svc_window_stat_t *stat, uint32_t value_u4)
+static void mqtt_svc_window_stat_add(mqtt_svc_window_stat_t *stat, double value_u4)
 {
     if (stat->count == 0U) {
         stat->min_u4 = value_u4;
@@ -44,7 +45,7 @@ static uint32_t mqtt_svc_window_stat_mean(const mqtt_svc_window_stat_t *stat)
         return 0U;
     }
 
-    return (uint32_t)((stat->sum_u4 + (stat->count / 2U)) / stat->count);
+    return measure_svc_precision_to_u4(stat->sum_u4 / (double)stat->count);
 }
 
 void mqtt_svc_window_reset(mqtt_svc_window_t *window)
@@ -54,7 +55,7 @@ void mqtt_svc_window_reset(mqtt_svc_window_t *window)
     }
 }
 
-void mqtt_svc_window_add(mqtt_svc_window_t *window, measure_kind_t kind, uint32_t value_u4)
+void mqtt_svc_window_add(mqtt_svc_window_t *window, measure_kind_t kind, double value_u4)
 {
     if (window == NULL) {
         return;
@@ -83,11 +84,11 @@ bool mqtt_svc_window_summarize(const mqtt_svc_window_t *window, mqtt_svc_telemet
     }
 
     telemetry->voltage_u4 = mqtt_svc_window_stat_mean(&window->voltage);
-    telemetry->voltage_min_u4 = window->voltage.min_u4;
-    telemetry->voltage_max_u4 = window->voltage.max_u4;
+    telemetry->voltage_min_u4 = measure_svc_precision_to_u4(window->voltage.min_u4);
+    telemetry->voltage_max_u4 = measure_svc_precision_to_u4(window->voltage.max_u4);
     telemetry->current_u4 = mqtt_svc_window_stat_mean(&window->current);
-    telemetry->current_min_u4 = window->current.min_u4;
-    telemetry->current_max_u4 = window->current.max_u4;
+    telemetry->current_min_u4 = measure_svc_precision_to_u4(window->current.min_u4);
+    telemetry->current_max_u4 = measure_svc_precision_to_u4(window->current.max_u4);
     telemetry->power_u4 = mqtt_svc_window_stat_mean(&window->power);
     return true;
 }

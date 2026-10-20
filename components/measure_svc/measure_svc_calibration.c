@@ -26,6 +26,7 @@
 #include "measure_svc_calibration_table.h"
 #include "measure_svc_core.h"
 #include "measure_svc_samples.h"
+#include "measure_svc_precision.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -374,7 +375,7 @@ esp_err_t measure_svc_calibration_commit(void)
     return ESP_OK;
 }
 
-uint32_t measure_svc_calibration_apply_target_u4(
+double measure_svc_calibration_apply_target_precise_u4(
     measure_kind_t kind,
     measure_channel_t channel,
     int16_t raw_code,
@@ -382,17 +383,26 @@ uint32_t measure_svc_calibration_apply_target_u4(
 {
     uint32_t actual_u4 = 0U;
     (void)measure_svc_core_raw_code_to_u4(raw_code, pga_full_scale_mv, &actual_u4);
+    double precise = actual_u4;
     const cal_target_t *target = find_target(kind, channel);
     if (target == NULL) {
-        return actual_u4;
+        return precise;
     }
     if (take_calibration_lock() != ESP_OK) {
         return actual_u4;
     }
-    (void)measure_svc_cal_table_apply_u4(
-        target->active_table, raw_code, pga_full_scale_mv, &actual_u4);
+    (void)measure_svc_cal_table_apply_precise_u4(
+        target->active_table, raw_code, pga_full_scale_mv, &precise);
     xSemaphoreGive(s_calibration_lock);
-    return actual_u4;
+    return precise;
+}
+
+uint32_t measure_svc_calibration_apply_target_u4(
+    measure_kind_t kind, measure_channel_t channel, int16_t raw_code,
+    uint16_t pga_full_scale_mv)
+{
+    return measure_svc_precision_to_u4(measure_svc_calibration_apply_target_precise_u4(
+        kind, channel, raw_code, pga_full_scale_mv));
 }
 
 esp_err_t measure_svc_calibration_init(void)

@@ -43,7 +43,10 @@ typedef struct {
     uint32_t value_u4; /**< Physical value multiplied by 10,000. */
 } measure_svc_sample_t;
 
-/** @brief Complete event published for one sampled or derived value. */
+/** @brief Complete event published for one sampled or derived value.
+ * Producers must set precise_u4 and its measure_svc_precision_to_u4() projection
+ * value_u4 together. Consumers must not reconstruct precision from value_u4.
+ */
 typedef struct {
     measure_kind_t kind; /**< Quantity represented by the event. */
     measure_channel_t channel; /**< Logical destination channel. */
@@ -53,7 +56,8 @@ typedef struct {
     int16_t raw_code; /**< Signed native ADC code before u4 conversion. */
     uint32_t source_generation; /**< Provider conversion ID; zero for derived values. */
     uint16_t pga_full_scale_mv; /**< PGA full-scale magnitude used for the conversion. */
-    uint32_t value_u4; /**< Calibrated or derived value in u4. */
+    double precise_u4; /**< Signed fractional u4; authoritative for averaging and power. */
+    uint32_t value_u4; /**< Unsigned projection of precise_u4 for immediate consumers. */
 } measure_svc_sample_event_t;
 
 /** @brief Listener invoked synchronously when an event of its kind is published. */

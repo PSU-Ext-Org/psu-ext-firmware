@@ -35,3 +35,8 @@ esp_err_t measure_svc_calibration_init(void);
 uint32_t measure_svc_calibration_apply_target_u4(
     measure_kind_t kind, measure_channel_t channel, int16_t raw_code,
     uint16_t pga_full_scale_mv);
+
+/** @brief Apply active calibration retaining signed fractional u4. Same fallback as unsigned API. */
+double measure_svc_calibration_apply_target_precise_u4(
+    measure_kind_t kind, measure_channel_t channel, int16_t raw_code,
+    uint16_t pga_full_scale_mv);

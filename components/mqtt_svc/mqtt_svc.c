@@ -131,7 +131,7 @@ static void mqtt_svc_sample_listener(const measure_svc_sample_event_t *event, vo
     }
 
     taskENTER_CRITICAL(&s_mqtt.pending_lock);
-    mqtt_svc_window_add(&s_mqtt.window, event->kind, event->value_u4);
+    mqtt_svc_window_add(&s_mqtt.window, event->kind, event->precise_u4);
     taskEXIT_CRITICAL(&s_mqtt.pending_lock);
 }
 

@@ -23,12 +23,12 @@ TEST_CASE("calibration record round trips valid table and rejects integrity erro
     const measure_svc_cal_table_t source = {
         .count = 6U,
         .points = {
-            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 256U},
-            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 512U},
-            {.raw_code = 0, .actual_u4 = 0U, .pga_full_scale_mv = 2048U},
-            {.raw_code = 600, .actual_u4 = 3000U, .pga_full_scale_mv = 256U},
-            {.raw_code = 1234, .actual_u4 = 5678U, .pga_full_scale_mv = 512U},
-            {.raw_code = 9999, .actual_u4 = 22222U, .pga_full_scale_mv = 2048U},
+            {.raw_code_q16 = (0) * 65536, .actual_u4 = 0U, .pga_full_scale_mv = 256U},
+            {.raw_code_q16 = (0) * 65536, .actual_u4 = 0U, .pga_full_scale_mv = 512U},
+            {.raw_code_q16 = (0) * 65536, .actual_u4 = 0U, .pga_full_scale_mv = 2048U},
+            {.raw_code_q16 = (600) * 65536, .actual_u4 = 3000U, .pga_full_scale_mv = 256U},
+            {.raw_code_q16 = (1234) * 65536, .actual_u4 = 5678U, .pga_full_scale_mv = 512U},
+            {.raw_code_q16 = (9999) * 65536, .actual_u4 = 22222U, .pga_full_scale_mv = 2048U},
         },
         .cached_segment = 2U,
         .cache_valid = true,
@@ -39,7 +39,7 @@ TEST_CASE("calibration record round trips valid table and rejects integrity erro
     TEST_ASSERT_TRUE(measure_svc_cal_record_encode(&source, record));
     TEST_ASSERT_TRUE(measure_svc_cal_record_decode(record, &decoded));
     TEST_ASSERT_EQUAL_UINT8(source.count, decoded.count);
-    TEST_ASSERT_EQUAL_INT16(source.points[1].raw_code, decoded.points[1].raw_code);
+    TEST_ASSERT_EQUAL_INT32(source.points[1].raw_code_q16, decoded.points[1].raw_code_q16);
     TEST_ASSERT_EQUAL_UINT32(source.points[4].actual_u4, decoded.points[4].actual_u4);
     TEST_ASSERT_EQUAL_UINT16(source.points[5].pga_full_scale_mv, decoded.points[5].pga_full_scale_mv);
     TEST_ASSERT_FALSE(decoded.cache_valid);
