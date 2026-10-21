@@ -52,6 +52,10 @@ void scpi_handler_handle_command(
     }
 
     scpi_handler_parse_command(command, &parsed);
+    if (strlen(parsed.keyword) >= sizeof(keyword_upper)) {
+        write_response("ERR,\"Command keyword too long\"");
+        return;
+    }
     strlcpy(keyword_upper, parsed.keyword, sizeof(keyword_upper));
     scpi_handler_uppercase(keyword_upper);
 
@@ -77,6 +81,10 @@ void scpi_handler_handle_command(
         scpi_handler_handle_trigger_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_wifi_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_mqtt_command(keyword_upper, &parsed, write_response)) {
+        return;
+    }
+
+    if (scpi_handler_dispatch_registered_command(keyword_upper, parsed.argument, writer)) {
         return;
     }
 

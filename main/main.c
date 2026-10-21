@@ -16,31 +16,37 @@
 
 #define MEASURE_SVC_DEFAULT_SAMPLE_RATE_HZ 100U
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include <stdint.h>
 #include <stdio.h>
+
 #include "esp_err.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include "clock_test.h"
-#include "wifi_manager.h"
-#include "status_led.h"
-#include "usb_com.h"
+#include "flash_store.h"
+#include "i2c_1_modules.h"
 #include "measure_svc.h"
 #include "mqtt_svc.h"
 #include "output_ctrl.h"
 #include "protection_svc.h"
-#include "wifi_connection.h"
+#include "status_led.h"
 #include "tcp_server.h"
-#include "flash_store.h"
+#include "timebase_svc.h"
+#include "timer_svc.h"
 #include "trigger_config.h"
 #include "trigger_svc.h"
-#include "timer_svc.h"
-#include "timebase_svc.h"
+#include "usb_com.h"
+#include "wifi_connection.h"
+#include "wifi_manager.h"
+
+static const char *TAG = "main";
 
 static const uint32_t MAIN_HARD_CURRENT_LIMIT_U4 = 25000U;
 static const uint32_t MAIN_MAX_OVP_LIMIT_U4 = 300000U;
 static const measure_svc_config_t MAIN_MEASURE_CONFIG = {
-    /* Board revision 1.1.0: input voltage is mapped for future use but is not sampled yet. */
+    /* Board revision 1.1.0: CH0 input voltage and CH1 output measurements. */
     .input_voltage_input = MEASURE_INPUT_ADS1115_AIN0,
     .output_voltage_input = MEASURE_INPUT_ADS1115_AIN1,
     .output_current_input = MEASURE_INPUT_ADS1115_AIN2,
@@ -49,18 +55,17 @@ uint32_t g_measurements_per_second_per_channel = MEASURE_SVC_DEFAULT_SAMPLE_RATE
 
 void app_main(void)
 {
-
-    // Set protection limits and initialize protection.
+    /* Board limits applied before sampling starts. */
     const protection_svc_limits_t protection_limits = {
         .hard_current_limit_u4 = MAIN_HARD_CURRENT_LIMIT_U4,
         .max_ovp_limit_u4 = MAIN_MAX_OVP_LIMIT_U4,
     };
 
     printf("Initializing components test...\n");
-    vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay to init flash
+    vTaskDelay(1000 / portTICK_PERIOD_MS); /* Startup settling delay. */
 
     // ESP_ERROR_CHECK(flash_store_init());
-   
+
     ESP_ERROR_CHECK(status_led_init());
     ESP_ERROR_CHECK(clock_test_init());
     ESP_ERROR_CHECK(timebase_svc_init());
@@ -82,5 +87,7 @@ void app_main(void)
     ESP_ERROR_CHECK(tcp_server_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_svc_init());
 
-    printf("All components initialized.\n");
+    ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_1_modules_init());
+
+    ESP_LOGI(TAG, "All components initialized.");
 }

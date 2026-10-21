@@ -52,6 +52,29 @@
 #define USB_COM_TX_TASK_STACK_SIZE 4096
 #define USB_COM_TX_TASK_PRIORITY 5
 
+static portMUX_TYPE s_status_lock = portMUX_INITIALIZER_UNLOCKED;
+static usb_com_status_t s_status;
+/* Callbacks record early host events, but publish them only after full startup. */
+static bool s_initialized;
+
+usb_com_status_t usb_com_get_status(void)
+{
+    portENTER_CRITICAL(&s_status_lock);
+    usb_com_status_t status = s_initialized ? s_status : (usb_com_status_t){0};
+    portEXIT_CRITICAL(&s_status_lock);
+    return status;
+}
+
+static void usb_com_set_mounted(bool mounted)
+{
+    portENTER_CRITICAL(&s_status_lock);
+    s_status.mounted = mounted;
+    if (!mounted) {
+        s_status.cdc_open = false;
+    }
+    portEXIT_CRITICAL(&s_status_lock);
+}
+
 static const char *TAG = "usb_com";
 
 /**
@@ -303,6 +326,9 @@ static void usb_com_rx_callback(int itf, cdcacm_event_t *event)
  */
 static void usb_com_line_state_changed_callback(int itf, cdcacm_event_t *event)
 {
+    portENTER_CRITICAL(&s_status_lock);
+    s_status.cdc_open = s_status.mounted && event->line_state_changed_data.dtr;
+    portEXIT_CRITICAL(&s_status_lock);
     ESP_LOGI(
         TAG,
         "CDC line state changed on port %d: DTR=%d RTS=%d",
@@ -317,12 +343,14 @@ static void usb_com_device_event_handler(tinyusb_event_t *event, void *arg)
 
     switch (event->id) {
     case TINYUSB_EVENT_ATTACHED:
+        usb_com_set_mounted(true);
         ESP_LOGI(TAG, "USB attached to host");
         status_led_set_usb_failed(false);
         status_led_set_usb_connected(true);
         break;
 
     case TINYUSB_EVENT_DETACHED:
+        usb_com_set_mounted(false);
         ESP_LOGI(TAG, "USB detached from host");
         status_led_set_usb_connected(false);
         break;
@@ -344,6 +372,7 @@ static void usb_com_device_event_handler(tinyusb_event_t *event, void *arg)
 
 void __attribute__((weak)) tud_mount_cb(void)
 {
+    usb_com_set_mounted(true);
     ESP_LOGI(TAG, "USB device mounted by host");
     status_led_set_usb_failed(false);
     status_led_set_usb_connected(true);
@@ -351,6 +380,7 @@ void __attribute__((weak)) tud_mount_cb(void)
 
 void __attribute__((weak)) tud_umount_cb(void)
 {
+    usb_com_set_mounted(false);
     ESP_LOGI(TAG, "USB device unmounted from host");
     status_led_set_usb_connected(false);
 }
@@ -375,10 +405,12 @@ esp_err_t usb_com_init(void)
         return ESP_OK;
     }
 
+    usb_com_set_mounted(false);
     ESP_LOGI(TAG, "USB initialization");
     const tinyusb_config_t tusb_cfg = TINYUSB_DEFAULT_CONFIG(usb_com_device_event_handler);
     esp_err_t err = tinyusb_driver_install(&tusb_cfg);
     if (err != ESP_OK) {
+        usb_com_set_mounted(false);
         status_led_set_usb_connected(false);
         status_led_set_usb_failed(true);
         ESP_LOGE(TAG, "TinyUSB driver install failed: %s", esp_err_to_name(err));
@@ -393,18 +425,21 @@ esp_err_t usb_com_init(void)
 
     err = tinyusb_cdcacm_init(&acm_cfg);
     if (err != ESP_OK) {
+        usb_com_set_mounted(false);
         status_led_set_usb_connected(false);
         status_led_set_usb_failed(true);
         ESP_LOGE(TAG, "CDC ACM init failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    s_usb_com.driver_ready = true;
     s_usb_com.command_length = 0;
     s_usb_com.tx_pending = false;
     s_usb_com.tx_length = 0U;
     s_usb_com.tx_lock = xSemaphoreCreateMutex();
-    ESP_RETURN_ON_FALSE(s_usb_com.tx_lock != NULL, ESP_ERR_NO_MEM, TAG, "USB CDC TX mutex creation failed");
+    if (s_usb_com.tx_lock == NULL) {
+        usb_com_set_mounted(false);
+        return ESP_ERR_NO_MEM;
+    }
     BaseType_t task_created = xTaskCreate(
         usb_com_tx_task,
         "usb_com_tx",
@@ -412,10 +447,17 @@ esp_err_t usb_com_init(void)
         NULL,
         USB_COM_TX_TASK_PRIORITY,
         &s_usb_com.tx_task_handle);
-    ESP_RETURN_ON_FALSE(task_created == pdPASS, ESP_ERR_NO_MEM, TAG, "USB CDC TX task creation failed");
+    if (task_created != pdPASS) {
+        usb_com_set_mounted(false);
+        return ESP_ERR_NO_MEM;
+    }
     status_led_set_usb_failed(false);
     status_led_set_usb_connected(false);
 
+    portENTER_CRITICAL(&s_status_lock);
+    s_initialized = true;
+    portEXIT_CRITICAL(&s_status_lock);
+    s_usb_com.driver_ready = true;
     ESP_LOGI(TAG, "USB CDC ready; send *IDN? over the enumerated COM port");
     return ESP_OK;
 }

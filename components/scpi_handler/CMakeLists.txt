@@ -15,6 +15,7 @@
 idf_component_register(
     SRCS
         "scpi_handler.c"
+        "scpi_handler_registry.c"
         "scpi_handler_calibration.c"
         "scpi_handler_common.c"
         "scpi_handler_measure.c"

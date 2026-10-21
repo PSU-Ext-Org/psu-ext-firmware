@@ -99,6 +99,13 @@ static void wifi_connection_event_handler(
         return;
     }
 
+    if ((event_base == IP_EVENT) && (event_id == IP_EVENT_STA_LOST_IP)) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(wifi_manager_set_connection_state(false, NULL));
+        status_led_set_wifi_connected(false);
+        xEventGroupClearBits(s_wifi_connection.event_group, WIFI_CONNECTION_CONNECTED_BIT);
+        return;
+    }
+
     if ((event_base == IP_EVENT) && (event_id == IP_EVENT_STA_GOT_IP)) {
         char ip[WIFI_MANAGER_IP_MAX_LENGTH];
         const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
@@ -164,7 +171,7 @@ esp_err_t wifi_connection_init(void)
         ESP_RETURN_ON_ERROR(
             esp_event_handler_instance_register(
                 IP_EVENT,
-                IP_EVENT_STA_GOT_IP,
+                ESP_EVENT_ANY_ID,
                 &wifi_connection_event_handler,
                 NULL,
                 &s_wifi_connection.ip_event_instance),
