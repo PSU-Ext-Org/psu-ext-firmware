@@ -17,3 +17,6 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES unity measure_svc nvs_flash
 )
+
+# Exercise the real timeout cleanup with a short wait in one selected test task.
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=xQueueSemaphoreTake")

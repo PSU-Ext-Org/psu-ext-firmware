@@ -15,7 +15,7 @@
 set(module_sources "i2c_1_modules.c")
 set(module_dependencies)
 set(module_include_dirs "include")
-set(module_private_include_dirs)
+set(module_private_include_dirs "private")
 if(CONFIG_PSUEXT_I2C_1_ENABLED)
     list(APPEND module_dependencies esp_driver_i2c)
 endif()
@@ -31,6 +31,17 @@ if(CONFIG_PSUEXT_I2C_1_SSD1306)
         measure_svc output_ctrl protection_svc esp_driver_gpio esp_timer
         scpi_handler wifi_manager usb_com tcp_server
     )
+endif()
+
+if(CONFIG_PSUEXT_I2C_1_MLX90614)
+    list(APPEND module_sources
+        "mlx90614/mlx90614_module.c"
+        "mlx90614/mlx90614_commands.c"
+        "mlx90614/mlx90614_data.c"
+        "mlx90614/vendor/mlx90614.c"
+    )
+    list(APPEND module_private_include_dirs "mlx90614/private" "mlx90614/vendor")
+    list(APPEND module_dependencies scpi_handler esp_timer)
 endif()
 
 idf_component_register(

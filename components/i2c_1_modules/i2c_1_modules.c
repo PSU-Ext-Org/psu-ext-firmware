@@ -31,6 +31,10 @@ static i2c_master_bus_handle_t s_bus;
 #include "ssd1306_views_internal.h"
 #endif
 
+#ifdef CONFIG_PSUEXT_I2C_1_MLX90614
+#include "mlx90614_module.h"
+#endif
+
 static bool s_init_attempted;
 static esp_err_t s_init_result;
 
@@ -45,6 +49,13 @@ esp_err_t i2c_1_modules_init(void)
 #ifdef CONFIG_PSUEXT_I2C_1_SSD1306
     /* Keep commands available to report hardware/bus failures explicitly. */
     s_init_result = ssd1306_register_scpi_commands();
+#endif
+
+#ifdef CONFIG_PSUEXT_I2C_1_MLX90614
+    const esp_err_t command_result = mlx90614_module_register_commands();
+    if (s_init_result == ESP_OK) {
+        s_init_result = command_result;
+    }
 #endif
 
 #ifdef CONFIG_PSUEXT_I2C_1_ENABLED
@@ -71,6 +82,13 @@ esp_err_t i2c_1_modules_init(void)
     const esp_err_t display_result = ssd1306_init(s_bus);
     if (s_init_result == ESP_OK) {
         s_init_result = display_result;
+    }
+#endif
+
+#ifdef CONFIG_PSUEXT_I2C_1_MLX90614
+    const esp_err_t temperature_result = mlx90614_module_init(s_bus);
+    if (s_init_result == ESP_OK) {
+        s_init_result = temperature_result;
     }
 #endif
 

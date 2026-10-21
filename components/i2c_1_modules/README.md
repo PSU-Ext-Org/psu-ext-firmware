@@ -19,23 +19,24 @@ limitations under the License.
 Select modules under **PSU-EXT configuration > External I2C modules** in
 `idf.py menuconfig`. SSD1306 support is disabled by default; when disabled,
 its driver, view registry, drawing helpers, and view sources are not compiled.
-Display-specific dependency declarations are also omitted. MLX90614 is listed as not implemented and
-has no selectable option or driver yet.
+Display-specific dependency declarations are also omitted. MLX90614 support is
+independently selectable and disabled by default; its implementation, commands,
+PSRAM buffers, library, and tests are omitted when disabled.
 
 The startup call `ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_1_modules_init())` runs
 after measurement sampling starts. With no modules selected, it returns
 `ESP_OK` without creating a bus. Otherwise it creates controller 1 on SDA
 GPIO6/SCL GPIO7 with internal pull-ups disabled and glitch filter count 7.
 Use suitable external pull-ups to 3.3 V, common ground, and module-appropriate
-power. The SSD1306 device operates at 400 kHz. Controller 0 remains owned by
-the measurement service.
+power. Devices use 100 kHz when MLX90614 is selected, otherwise the SSD1306
+uses 400 kHz. Controller 0 remains owned by the measurement service.
 
 Each implemented module's menuconfig option must `select PSUEXT_I2C_1_ENABLED`.
 This hidden flag guards shared bus initialization independently of any particular
 module. Module source inclusion and initialization stay guarded by their own
 options. When adding another driver, select the same flag; the manager will
-create one shared bus whenever any supported module is enabled. The MLX90614
-placeholder does not select it.
+create one shared bus whenever any supported module is enabled. Both the
+SSD1306 and MLX90614 options select it.
 
 The manager owns the shared bus until reboot. Drivers borrow its handle and
 clean up only their own devices. Initialization returns the first error;
@@ -109,3 +110,13 @@ Register only for compiled-in modules. A module may register after successful
 hardware initialization, or register earlier and report an unavailable device in
 its callbacks. Runtime device failure must leave callbacks safe, since command
 registrations persist until reboot.
+
+## MLX90614 object temperature
+
+The optional MLX90614 pyrometer shares the same I2C_1 handle and is selected in
+menuconfig independently of the OLED. It owns signed temperature acquisition,
+PSRAM history, and `EXT:MEAS:TEMP?` / `EXT:MEAS:TEMP:DATA?` commands. All sensor
+code and tests are omitted when disabled. With the sensor enabled, every device
+on this bus uses 100 kHz; OLED-only configurations retain 400 kHz.
+See [MLX90614 details](mlx90614/README.md) for protocol, library provenance,
+resource ownership, and validation instructions.

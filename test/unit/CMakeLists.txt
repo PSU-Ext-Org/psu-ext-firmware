@@ -18,7 +18,6 @@ get_filename_component(PSU_EXT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 
 set(EXTRA_COMPONENT_DIRS
     "${PSU_EXT_ROOT}/components"
-    "$ENV{IDF_PATH}/components/unity/test_apps/main"
 )
 
 set(COMPONENTS main measure_svc mqtt_svc scpi_handler i2c_1_modules usb_com esp_psram)
