@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "ssd1306.h"
+#include "i2c_1_modules_config.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -200,7 +201,7 @@ static esp_err_t initialize_display(i2c_master_bus_handle_t bus)
     const i2c_device_config_t device_config = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = address,
-        .scl_speed_hz = 400000,
+        .scl_speed_hz = I2C_1_MODULES_CLOCK_HZ,
     };
     err = i2c_master_bus_add_device(bus, &device_config, &s_device);
     if (err != ESP_OK) {

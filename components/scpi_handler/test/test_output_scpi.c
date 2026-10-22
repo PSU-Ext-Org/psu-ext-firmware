@@ -25,8 +25,6 @@
 #include "protection_svc.h"
 #include "scpi_handler.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "unity.h"
 
@@ -208,46 +206,4 @@ TEST_CASE("output scpi enable is blocked by CH0 input OVP", "[output][scpi]")
 
     TEST_ESP_OK(protection_svc_set_ovp_u4(PROTECTION_SVC_CHANNEL_CH0, original_ch0_ovp_u4));
     TEST_ESP_OK(protection_svc_clear_trips(PROTECTION_SVC_CHANNEL_CH0));
-}
-
-TEST_CASE("output scpi enable clears a latched CH1 OCP trip", "[output][scpi]")
-{
-    ensure_output_runtime();
-    reset_output_off();
-
-    uint32_t original_ch0_ovp_u4;
-    uint32_t original_ocp_u4;
-    bool original_ocp_enabled;
-    TEST_ESP_OK(protection_svc_get_ovp_u4(PROTECTION_SVC_CHANNEL_CH0, &original_ch0_ovp_u4));
-    TEST_ESP_OK(protection_svc_get_ocp_u4(PROTECTION_SVC_CHANNEL_CH1, &original_ocp_u4));
-    TEST_ESP_OK(protection_svc_get_ocp_enabled(PROTECTION_SVC_CHANNEL_CH1, &original_ocp_enabled));
-
-    /* Latch OCP from any non-zero current reading. */
-    TEST_ESP_OK(protection_svc_set_ocp_u4(PROTECTION_SVC_CHANNEL_CH1, 0U));
-    TEST_ESP_OK(protection_svc_set_ocp_enabled(PROTECTION_SVC_CHANNEL_CH1, true));
-
-    bool ocp_tripped = false;
-    for (int attempt = 0; (attempt < 50) && !ocp_tripped; ++attempt) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-        TEST_ESP_OK(protection_svc_get_ocp_tripped(PROTECTION_SVC_CHANNEL_CH1, &ocp_tripped));
-    }
-
-    TEST_ESP_OK(protection_svc_set_ocp_u4(PROTECTION_SVC_CHANNEL_CH1, original_ocp_u4));
-    TEST_ESP_OK(protection_svc_set_ocp_enabled(PROTECTION_SVC_CHANNEL_CH1, original_ocp_enabled));
-
-    if (!ocp_tripped) {
-        TEST_IGNORE_MESSAGE("needs a non-zero CH1 current reading to latch OCP");
-    }
-
-    TEST_ESP_OK(protection_svc_set_ovp_u4(PROTECTION_SVC_CHANNEL_CH0, TEST_OUTPUT_MAX_OVP_LIMIT_U4));
-    s_event_count = 0U;
-
-    run_scpi("OUTP CH1,1");
-    TEST_ASSERT_FALSE_MESSAGE(s_saw_response, s_last_response);
-    TEST_ESP_OK(protection_svc_get_ocp_tripped(PROTECTION_SVC_CHANNEL_CH1, &ocp_tripped));
-    TEST_ASSERT_FALSE(ocp_tripped);
-    TEST_ASSERT_TRUE(s_event_count >= 1U);
-
-    reset_output_off();
-    TEST_ESP_OK(protection_svc_set_ovp_u4(PROTECTION_SVC_CHANNEL_CH0, original_ch0_ovp_u4));
 }

@@ -22,7 +22,11 @@
 #include "../measure_svc_calibration_capture_config.h"
 #include "../measure_svc_event_bus.h"
 
+#include <stdatomic.h>
+#include <stdio.h>
+
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "unity.h"
@@ -31,7 +35,26 @@
 
 typedef struct {
     esp_err_t result;
+    bool shorten_timeout;
+    bool timeout_injected;
+    SemaphoreHandle_t done;
 } capture_args_t;
+
+/* Restrict deadline injection to the no-samples capture task. All other waits,
+ * including successful capture retries, retain the production behavior. */
+static capture_args_t *s_timeout_args;
+static _Atomic(TaskHandle_t) s_timeout_task;
+
+BaseType_t __real_xQueueSemaphoreTake(QueueHandle_t queue, TickType_t ticks_to_wait);
+BaseType_t __wrap_xQueueSemaphoreTake(QueueHandle_t queue, TickType_t ticks_to_wait)
+{
+    if (xTaskGetCurrentTaskHandle() == atomic_load(&s_timeout_task) &&
+        ticks_to_wait == MEASURE_SVC_CAL_CAPTURE_TIMEOUT_TICKS) {
+        s_timeout_args->timeout_injected = true;
+        ticks_to_wait = pdMS_TO_TICKS(100U);
+    }
+    return __real_xQueueSemaphoreTake(queue, ticks_to_wait);
+}
 
 static void ensure_runtime_and_idle(void)
 {
@@ -61,8 +84,17 @@ static void ensure_runtime_and_idle(void)
 static void capture_task(void *context)
 {
     capture_args_t *args = context;
+    if (args->shorten_timeout) {
+        s_timeout_args = args;
+        atomic_store(&s_timeout_task, xTaskGetCurrentTaskHandle());
+    }
     args->result = measure_svc_calibration_capture_point(
         MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, 10000U, NULL);
+    if (args->shorten_timeout) {
+        atomic_store(&s_timeout_task, NULL);
+        s_timeout_args = NULL;
+        xSemaphoreGive(args->done);
+    }
     vTaskDelete(NULL);
 }
 
@@ -197,11 +229,23 @@ TEST_CASE("calibration retries an unstable ADS1115-code window", "[calibration][
     TEST_ESP_OK(measure_svc_calibration_abort());
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
-    capture_args_t timeout_args = {.result = ESP_ERR_INVALID_STATE};
+    capture_args_t timeout_args = {
+        .result = ESP_ERR_INVALID_STATE,
+        .shorten_timeout = true,
+        .done = xSemaphoreCreateBinary(),
+    };
+    TEST_ASSERT_NOT_NULL(timeout_args.done);
+    printf("Injecting a 100 ms wait for the no-samples capture timeout test\n");
     TEST_ASSERT_EQUAL(pdPASS, xTaskCreate(capture_task, "timeout_cap", 4096U, &timeout_args, 5U, NULL));
-    for (uint16_t i = 0U; (i < 3050U) && (timeout_args.result == ESP_ERR_INVALID_STATE); ++i) {
-        vTaskDelay(pdMS_TO_TICKS(10U));
+    const BaseType_t completed = xSemaphoreTake(timeout_args.done, pdMS_TO_TICKS(1000U));
+    /* If the hook regresses, wait for the worker to finish before its stack
+     * context goes out of scope, then report the bounded-wait failure. */
+    if (completed != pdTRUE) {
+        xSemaphoreTake(timeout_args.done, portMAX_DELAY);
     }
+    vSemaphoreDelete(timeout_args.done);
+    TEST_ASSERT_EQUAL(pdTRUE, completed);
+    TEST_ASSERT_TRUE(timeout_args.timeout_injected);
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, timeout_args.result);
     TEST_ESP_OK(measure_svc_calibration_abort());
 }

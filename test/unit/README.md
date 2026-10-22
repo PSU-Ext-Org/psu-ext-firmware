@@ -1,11 +1,8 @@
 # ESP-IDF Target Unit Tests
 
-This project configures ESP-IDF's supplied Unity test application for psu-ext
-component tests. The runner comes from:
-
-```powershell
-$env:IDF_PATH\components\unity\test_apps\main
-```
+This project runs psu-ext component tests using ESP-IDF's Unity menu runner.
+The local `main/test_main.c` starts the menu without including ESP-IDF's four
+example tests.
 
 Production builds from the repository root do not compile component `test`
 directories. This unit-test project enables tests with `TEST_COMPONENTS`.
@@ -45,6 +42,12 @@ test with any one of these inputs:
 ```
 
 The `*` command runs all registered tests.
+
+The no-samples calibration timeout case injects a 100 ms semaphore wait only
+for its capture task. It still exercises timeout cleanup; the production
+capture deadline remains 30 seconds. The calibration SCPI test creates and
+aborts a temporary staged point so earlier tests' committed calibration does
+not affect its expected query response.
 
 Other useful selectors:
 
@@ -103,3 +106,11 @@ Enable `PSU-EXT configuration > External I2C modules > SSD1306 128x64 OLED displ
 in this test application's `idf.py menuconfig`, then build and select `[display]`
 in the Unity runner. An attached display is not required for these tests.
 When this option is disabled, display implementation and test sources are omitted.
+
+## Pyrometer Tests
+
+Enable `PSU-EXT configuration > External I2C modules > MLX90614 infrared object
+temperature sensor` in this test application's menuconfig (with PSRAM enabled),
+then build and select `[mlx90614]`. No physical sensor is required; driver and
+PSRAM allocation failures are injected only during the relevant test case.
+The display and pyrometer test groups are independently omitted when disabled.

@@ -16,8 +16,13 @@
 
 #include "measure_svc.h"
 #include "measure_svc_calibration.h"
+#include "measure_svc_samples.h"
+#include "../../measure_svc/measure_svc_event_bus.h"
 #include "scpi_handler.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "unity.h"
@@ -74,15 +79,58 @@ static void ensure_runtime(void)
     initialized = true;
 }
 
+static void publish_zero_calibration_samples(void *context)
+{
+    const measure_svc_sample_event_t event = {
+        .kind = MEASURE_KIND_VOLTAGE,
+        .channel = MEASURE_CHANNEL_0,
+        .physical_input = MEASURE_INPUT_ADS1115_AIN0,
+        .pga_full_scale_mv = 256U,
+    };
+    /* Two discarded conversions followed by one accepted conversion. Delay
+     * first so the caller can enter the blocking capture. */
+    for (unsigned i = 0; i < 3; ++i) {
+        vTaskDelay(pdMS_TO_TICKS(10U));
+        measure_svc_event_bus_publish(&event);
+    }
+    xSemaphoreGive((SemaphoreHandle_t)context);
+    vTaskDelete(NULL);
+}
+
+static void stage_zero_calibration_point(void)
+{
+    uint32_t previous_average;
+    TEST_ESP_OK(measure_svc_get_average_count(MEASURE_KIND_VOLTAGE, &previous_average));
+    TEST_ESP_OK(measure_svc_set_average_count(MEASURE_KIND_VOLTAGE, 1U));
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    SemaphoreHandle_t done = xSemaphoreCreateBinary();
+    TEST_ASSERT_NOT_NULL(done);
+    TEST_ASSERT_EQUAL(pdPASS,
+        xTaskCreate(publish_zero_calibration_samples, "scpi_cal_sample", 4096U, done, 4U, NULL));
+    const esp_err_t captured = measure_svc_calibration_capture_point(
+        MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, 1U, 0U, NULL);
+    xSemaphoreTake(done, portMAX_DELAY);
+    vSemaphoreDelete(done);
+    TEST_ESP_OK(measure_svc_set_average_count(MEASURE_KIND_VOLTAGE, previous_average));
+    TEST_ESP_OK(captured);
+}
+
 TEST_CASE("calibration scpi reports transaction states and malformed commands", "[calibration][scpi]")
 {
     ensure_runtime();
+    measure_svc_cal_transaction_t initial_transaction;
+    TEST_ESP_OK(measure_svc_calibration_get_transaction(&initial_transaction));
+    if (initial_transaction.state == MEASURE_SVC_CAL_TRANSACTION_OPEN) {
+        TEST_ESP_OK(measure_svc_calibration_abort());
+    }
 
     char command[] = "CALibration:TRANsaction?";
     run_scpi(command);
     TEST_ASSERT_TRUE(s_saw_response);
     TEST_ASSERT_EQUAL_STRING("IDLE", s_last_response);
 
+    /* Query our own staged fixture, independent of active/NVS calibration. */
+    stage_zero_calibration_point();
     char point_query[] = "CALibration:VOLTage? CH0,POINt1";
     run_scpi(point_query);
     TEST_ASSERT_EQUAL_STRING("0.000000,0.0000,0.256", s_last_response);
@@ -96,6 +144,7 @@ TEST_CASE("calibration scpi reports transaction states and malformed commands", 
     run_scpi(invalid_index);
     TEST_ASSERT_NOT_NULL(strstr(s_last_response, "Expected"));
 
+    TEST_ESP_OK(measure_svc_calibration_abort());
     char start[] = "CALibration:STARt VOLTage,CH0";
     run_scpi(start);
     TEST_ASSERT_FALSE(s_saw_response);

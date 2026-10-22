@@ -56,7 +56,26 @@ config PSUEXT_I2C_1_SSD1306
         controller 1 (SDA GPIO6, SCL GPIO7). Disabled builds omit the driver.
         A missing or failed display does not prevent normal firmware startup.
 
-comment "MLX90614 temperature sensor (not implemented)"
+config PSUEXT_I2C_1_MLX90614
+    bool "MLX90614 infrared object temperature sensor"
+    default n
+    select PSUEXT_I2C_1_ENABLED
+    depends on SPIRAM
+    help
+        Compile an optional MLX90614 pyrometer at address 0x5A on I2C
+        controller 1 (SDA GPIO6/SCL GPIO7). History and binary response
+        buffers require PSRAM. Enabled modules share a 100 kHz bus clock.
+        Missing hardware is nonfatal. Disabled builds omit all sensor code,
+        commands, buffers, driver, and tests.
+
+config PSUEXT_MLX90614_POLL_MS
+    int "MLX90614 polling interval (ms)"
+    depends on PSUEXT_I2C_1_MLX90614
+    range 100 10000
+    default 100
+    help
+        Host polling interval; the sensor's own output refresh depends on
+        its existing FIR/IIR settings, which firmware leaves unchanged.
 
 endmenu
 

@@ -20,8 +20,9 @@ Enable **PSU-EXT configuration > External I2C modules > SSD1306 128x64 OLED disp
 in menuconfig. Connect SDA GPIO6, SCL GPIO7, common ground, and module-appropriate
 power. External pull-ups to 3.3 V are required; internal I2C pull-ups are disabled.
 The manager owns I2C controller 1; the ADC remains on controller 0. The display
-uses 400 kHz, probes 0x3C then 0x3D once at startup, and assumes the first ACK is
-an SSD1306-compatible 128x64 OLED. Orientation remains C8/A1.
+uses 400 kHz alone or 100 kHz when sharing the bus with an enabled MLX90614.
+It probes 0x3C then 0x3D once at startup and assumes the first ACK is an
+SSD1306-compatible 128x64 OLED. Orientation remains C8/A1.
 
 ## Views and SCPI
 
@@ -105,8 +106,8 @@ removes only its device. The shared bus remains owned by the manager.
   protection, communications, and unavailable command responses continue.
 - Boot with support disabled; display commands must be unknown.
 
-The target test component registers an additional view with ID 17 from its own
-source file. It covers command validation, registration errors, callback context,
+The tests in `ssd1306/test/` register an additional view with ID 17 from its own
+source file. They cover command validation, registration errors, callback context,
 frame clearing, selection and cycling across noncontiguous IDs, debounce,
 timer wraparound, concurrent selectors, framebuffer bounds, maximum values,
 and full-frame clearing without needing an attached OLED.
@@ -206,3 +207,6 @@ helpers, button handling, and display-specific dependency declarations. The targ
 test application also omits display tests and their dependencies when disabled.
 Enable SSD1306 in the test application menuconfig to build the [display] tests;
 these tests use synthetic snapshots and do not require an attached display.
+
+Test sources live beside each module under its own `test/` directory. The parent
+`i2c_1_modules/test/CMakeLists.txt` conditionally registers enabled modules' tests.
