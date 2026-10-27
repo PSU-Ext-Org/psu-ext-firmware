@@ -19,6 +19,9 @@ limitations under the License.
 Enable `PSU-EXT configuration > External I2C modules > MLX90614 infrared object
 temperature sensor` in `idf.py menuconfig` (PSRAM must be enabled). The module is
 disabled by default. Polling defaults to 100 ms and can be set to 100-10000 ms.
+`MLX90614 temperature averaging samples` sets the scalar-query window from 1 to
+25 successful polls, defaulting to 10. Set it to 1 for no averaging. This is a
+build-time menuconfig setting.
 
 ## Hardware and lifecycle
 
@@ -38,14 +41,14 @@ transitions; ESP-IDF retains its own bus-timeout diagnostics.
 
 The host polling interval does not change the sensor's internal refresh rate.
 Existing FIR/IIR filters, factory calibration, and emissivity are left untouched.
-No firmware calibration, averaging controls, ambient-temperature queries, second
-object channel, display changes, or MQTT integration are added.
+No firmware calibration, SCPI averaging controls, ambient-temperature queries,
+second object channel, display changes, or MQTT integration are added.
 
 ## Commands and wire format
 
 | Command | Result |
 |---|---|
-| `EXT:MEAS:TEMP? CH1` | Latest object temperature, Celsius with four decimals |
+| `EXT:MEAS:TEMP? CH1` | Averaged object temperature, Celsius with four decimals |
 | `EXT:MEAS:TEMP:DATA? CH1[,count[,start_offset]]` | Timestamped binary history |
 
 `1` and case-insensitive `CH1` select the same object channel. `MEASURE` and
@@ -56,6 +59,12 @@ Temperature is signed end to end: `-13.1500` is a valid scalar response.
 Native 0.02 K/count values convert exactly to Celsius x 10000 as
 `raw * 200 - 2731500`; the sensor error flag rejects a reading. Four decimal
 places preserve protocol consistency, not a claim of extra sensor resolution.
+Scalar queries average the newest configured number of successful polls, using
+all available samples while history is shorter than the window. The signed
+average is rounded once to Celsius x 10000, with ties away from zero. Queries do
+not acquire additional readings. A failed poll still makes the scalar unavailable;
+after recovery, averaging includes retained successful polls from before the
+failure until they leave the window. Binary history retains individual readings.
 
 History contains at most 1000 successful polls. A full ring overwrites its
 oldest record. This retains approximately 100 seconds at the default rate;
@@ -119,8 +128,8 @@ Vendoring lets CMake omit the driver completely when menuconfig disables it.
 
 Enable the module in the target-test application's menuconfig and run
 `[mlx90614]`. Tests use synthetic samples and fault injection, without installing
-a real sensor. They cover signed conversion/formatting, binary encoding, ring
-wrap, count/offset validation, aliases, runtime errors/recovery, concurrency,
+a real sensor. They cover signed conversion/formatting and averaging, binary
+encoding, ring wrap, count/offset validation, aliases, runtime errors/recovery, concurrency,
 PSRAM placement, and allocation-failure cleanup/cached startup failure. Additional
 regressions hold a transport callback open to check immediate busy responses and
 stable response bytes, and inject transfers through the real vendor read path

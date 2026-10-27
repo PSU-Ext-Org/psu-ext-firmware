@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "sdkconfig.h"
+
 typedef struct {
     size_t count;
     size_t offset;
@@ -113,10 +115,21 @@ void mlx90614_query_temperature(const char *argument,
         return;
     }
     xSemaphoreTake(state->history_lock, portMAX_DELAY);
-    const mlx90614_sample_t *latest = state->history.count == 0 ? NULL :
-        mlx90614_history_at(&state->history, state->history.count - 1);
-    const bool valid = state->ready && state->history.latest_valid && latest != NULL;
-    const int32_t value = valid ? latest->temperature_c4 : 0;
+    const bool valid = state->ready && state->history.latest_valid && state->history.count > 0;
+    int32_t value = 0;
+    if (valid) {
+        size_t count = state->history.count;
+        if (count > CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT) {
+            count = CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT;
+        }
+        int64_t sum = 0;
+        for (size_t i = state->history.count - count; i < state->history.count; ++i) {
+            sum += mlx90614_history_at(&state->history, i)->temperature_c4;
+        }
+        /* Round once to Celsius x 10000, with signed ties away from zero. */
+        const int64_t half_count = (int64_t)count / 2;
+        value = (int32_t)((sum + (sum < 0 ? -half_count : half_count)) / (int64_t)count);
+    }
     xSemaphoreGive(state->history_lock);
     if (!valid) {
         writer->write_text("ERR,\"Temperature unavailable\"");

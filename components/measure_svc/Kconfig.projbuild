@@ -77,6 +77,17 @@ config PSUEXT_MLX90614_POLL_MS
         Host polling interval; the sensor's own output refresh depends on
         its existing FIR/IIR settings, which firmware leaves unchanged.
 
+config PSUEXT_MLX90614_AVERAGE_COUNT
+    int "MLX90614 temperature averaging samples"
+    depends on PSUEXT_I2C_1_MLX90614
+    range 1 25
+    default 10
+    help
+        Number of newest successful polls averaged by EXT:MEAS:TEMP?.
+        Set to 1 to disable averaging. If fewer samples are available,
+        average all available samples. Binary temperature history retains
+        individual readings. This setting is fixed at build time.
+
 endmenu
 
 endmenu
