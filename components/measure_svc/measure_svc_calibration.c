@@ -20,6 +20,9 @@
  */
 
 #include "measure_svc_calibration.h"
+#include "measure_svc.h"
+#include "measure_svc_coordination.h"
+#include "measure_svc_relative.h"
 #include "measure_svc_calibration_capture.h"
 #include "measure_svc_calibration_persistence.h"
 #include "measure_svc_calibration_runtime.h"
@@ -118,6 +121,7 @@ esp_err_t measure_svc_calibration_start(measure_kind_t kind, measure_channel_t c
         return ESP_ERR_INVALID_STATE;
     }
 
+    measure_svc_relative_clear_locked();
     memset(&s_staging_table, 0, sizeof(s_staging_table));
     s_transaction_target = target;
     s_transaction_state = MEASURE_SVC_CAL_TRANSACTION_OPEN;
@@ -428,4 +432,35 @@ esp_err_t measure_svc_calibration_init(void)
     }
     s_calibration_initialized = true;
     return ESP_OK;
+}
+
+/* The calibration mutex serializes REL changes and complete protection actions
+ * against transaction transitions. Lock order: calibration, then protection.
+ * Guarded protection code must not call back into calibration APIs. */
+esp_err_t measure_svc_coordination_begin(bool *bypassed)
+{
+    if (bypassed == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_err_t err = take_calibration_lock();
+    if (err != ESP_OK) {
+        return err;
+    }
+    *bypassed = s_transaction_state != MEASURE_SVC_CAL_TRANSACTION_IDLE;
+    return ESP_OK;
+}
+
+void measure_svc_coordination_end(void)
+{
+    xSemaphoreGive(s_calibration_lock);
+}
+
+esp_err_t measure_svc_calibration_protection_begin(bool *bypassed)
+{
+    return measure_svc_coordination_begin(bypassed);
+}
+
+void measure_svc_calibration_protection_end(void)
+{
+    measure_svc_coordination_end();
 }

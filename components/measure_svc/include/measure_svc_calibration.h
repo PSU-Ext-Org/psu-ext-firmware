@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -83,6 +84,15 @@ esp_err_t measure_svc_calibration_get_count(
     measure_kind_t kind, measure_channel_t channel, uint8_t *count);
 /** @brief Validate, persist, and atomically publish the staged target table. */
 esp_err_t measure_svc_calibration_commit(void);
+
+/**
+ * @brief Lock transaction transitions for a complete protection decision/action.
+ * On success, always call protection_end, including when bypassed is true.
+ * Do not call calibration APIs while holding this guard.
+ */
+esp_err_t measure_svc_calibration_protection_begin(bool *bypassed);
+/** @brief Release a successful protection_begin guard. */
+void measure_svc_calibration_protection_end(void);
 
 #ifdef __cplusplus
 }

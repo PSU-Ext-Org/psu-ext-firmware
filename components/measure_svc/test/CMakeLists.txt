@@ -15,6 +15,7 @@
 idf_component_register(
     SRC_DIRS "."
     INCLUDE_DIRS "."
+    PRIV_INCLUDE_DIRS "../../../test/support"
     REQUIRES unity measure_svc nvs_flash
 )
 

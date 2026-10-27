@@ -19,11 +19,38 @@
  * @brief Shared SCPI command dispatcher for PSU-EXT transports.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_commands.h"
+#include "scpi_handler_pattern.h"
 
 #include <string.h>
 
 #include "esp_log.h"
+
+#define SCPI_BUILTIN_MODULES(X) \
+    X(system) \
+    X(measure) \
+    X(calibration_points) \
+    X(measure_config) \
+    X(data) \
+    X(relative) \
+    X(calibration) \
+    X(output) \
+    X(protection) \
+    X(timer) \
+    X(trigger) \
+    X(wifi) \
+    X(mqtt)
+
+#define DECLARE_MODULE(name) extern const scpi_handler_command_module_t scpi_handler_##name##_module;
+SCPI_BUILTIN_MODULES(DECLARE_MODULE)
+#undef DECLARE_MODULE
+
+#define MODULE_ADDRESS(name) &scpi_handler_##name##_module,
+static const scpi_handler_command_module_t *const s_modules[] = {
+    SCPI_BUILTIN_MODULES(MODULE_ADDRESS)
+};
+#undef MODULE_ADDRESS
+#undef SCPI_BUILTIN_MODULES
 
 static const char *TAG = "scpi_handler";
 
@@ -67,21 +94,14 @@ void scpi_handler_handle_command(
         parsed.argument == NULL ? "" :
             (scpi_handler_keyword_is_secret(keyword_upper) ? "***" : parsed.argument));
 
-    if (strcmp(keyword_upper, "*IDN?") == 0) {
-        write_response(SCPI_HANDLER_IDN_RESPONSE);
-        return;
-    }
-
-    if (scpi_handler_handle_system_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_measure_command(keyword_upper, &parsed, writer) ||
-        scpi_handler_handle_calibration_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_output_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_protection_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_timer_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_trigger_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_wifi_command(keyword_upper, &parsed, write_response) ||
-        scpi_handler_handle_mqtt_command(keyword_upper, &parsed, write_response)) {
-        return;
+    for (size_t module = 0; module < sizeof(s_modules) / sizeof(s_modules[0]); ++module) {
+        for (size_t entry = 0; entry < s_modules[module]->count; ++entry) {
+            const scpi_handler_command_entry_t *command = &s_modules[module]->commands[entry];
+            if (scpi_handler_pattern_match(command->pattern, keyword_upper)) {
+                command->callback(&parsed, writer);
+                return;
+            }
+        }
     }
 
     if (scpi_handler_dispatch_registered_command(keyword_upper, parsed.argument, writer)) {

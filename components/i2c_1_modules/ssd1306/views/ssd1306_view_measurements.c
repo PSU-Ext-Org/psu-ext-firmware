@@ -44,7 +44,9 @@ enum {
 static ssd1306_reading_t read_measurement(measure_channel_t channel, measure_kind_t kind)
 {
     ssd1306_reading_t reading = {0};
-    reading.valid = measure_svc_read(channel, kind, &reading.value_u4) == ESP_OK;
+    reading.valid = (kind == MEASURE_KIND_POWER ?
+        measure_svc_read(channel, kind, &reading.value_u4) :
+        measure_svc_read_relative(channel, kind, &reading.value_u4)) == ESP_OK;
     return reading;
 }
 

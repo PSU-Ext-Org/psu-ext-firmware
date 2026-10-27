@@ -26,3 +26,18 @@ because the installed tools are wired through `C:\Espressif\tools`.
 If the build fails with a sandbox `WinError 5` subprocess permission error,
 rerun the same build command with escalated permissions. Prefer rerunning the
 quiet wrapper above unless live output is needed for diagnosis.
+
+## Preserve device calibration during tests
+
+On-device tests must never erase or overwrite saved production calibration in
+NVS (`meas_cfg`, including all calibration blobs and legacy calibration keys).
+Never erase the default NVS partition, including as recovery from NVS
+initialization errors. Fail the test or stop the runner instead.
+
+Keep all test calibration reads, writes, commits, corruption fixtures, and resets
+isolated from production storage for the entire executable lifetime. The unit
+runner in `test/unit` links `test/support/test_nvs.c`: it redirects `meas_cfg`
+opens to `test_meas_cfg` and rejects whole-partition NVS erasure. Reset only the
+dedicated test namespace. Alternative runners must retain equivalent isolation.
+Do not rely on backing up production calibration and restoring it after a test:
+assertions, resets, and power loss can bypass cleanup.

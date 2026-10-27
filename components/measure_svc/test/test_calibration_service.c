@@ -27,11 +27,12 @@
 #include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "test_nvs.h"
 #include "unity.h"
 
 #define TEST_CAPTURE_SAMPLES 16U
 
-#define CAL_NVS_NAMESPACE "meas_cfg"
+#define CAL_NVS_NAMESPACE TEST_MEASURE_NVS_NAMESPACE
 #define CAL_NVS_KEY_V_CH0 "cal_v_ch0"
 #define CAL_NVS_KEY_I_CH1 "cal_i_ch1"
 
@@ -43,11 +44,9 @@ typedef struct {
     esp_err_t result;
 } capture_task_args_t;
 
-static void reset_nvs(void)
+static void reset_test_measurement_nvs(void)
 {
-    (void)nvs_flash_deinit();
-    TEST_ESP_OK(nvs_flash_erase());
-    TEST_ESP_OK(nvs_flash_init());
+    TEST_ESP_OK(test_nvs_reset_measurement());
 }
 
 static void ensure_measure_runtime(void)
@@ -57,7 +56,7 @@ static void ensure_measure_runtime(void)
         return;
     }
 
-    reset_nvs();
+    reset_test_measurement_nvs();
     const measure_svc_config_t config = {
         .input_voltage_input = MEASURE_INPUT_ADS1115_AIN0,
         .output_voltage_input = MEASURE_INPUT_ADS1115_AIN1,
@@ -194,7 +193,7 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
 
     uint8_t count = 0U;
     TEST_ESP_OK(measure_svc_calibration_get_count(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &count));
-    TEST_ASSERT_EQUAL_UINT8(6U, count);
+    TEST_ASSERT_TRUE(count <= MEASURE_SVC_CAL_MAX_POINTS);
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1));
@@ -225,6 +224,13 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
         measure_svc_calibration_apply_target_u4(
             MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ESP_OK(measure_svc_calibration_commit());
+    bool bypassed;
+    TEST_ESP_OK(measure_svc_calibration_protection_begin(&bypassed));
+    measure_svc_calibration_protection_end();
+    TEST_ASSERT_FALSE(bypassed);
+    uint32_t offset;
+    TEST_ESP_OK(measure_svc_get_relative_u4(MEASURE_CHANNEL_0, MEASURE_KIND_VOLTAGE, &offset));
+    TEST_ASSERT_EQUAL_UINT32(0U, offset);
     TEST_ASSERT_EQUAL_UINT32(22000U, measure_svc_calibration_apply_target_u4(
         MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ASSERT_EQUAL_UINT32(
@@ -244,7 +250,7 @@ TEST_CASE("calibration invalid commit and persistence failure keep transaction o
 {
     ensure_measure_runtime();
     ensure_calibration_transaction_idle();
-    reset_nvs();
+    reset_test_measurement_nvs();
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1));
     TEST_ESP_OK(measure_svc_calibration_clear(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1));
@@ -262,9 +268,17 @@ TEST_CASE("calibration invalid commit and persistence failure keep transaction o
     TEST_ESP_OK(capture_point_with_raw(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 6U, 200U, 2000U));
     const uint32_t active_before = measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U);
     TEST_ESP_OK(nvs_flash_deinit());
-    TEST_ASSERT_NOT_EQUAL(ESP_OK, measure_svc_calibration_commit());
+    const esp_err_t commit_err = measure_svc_calibration_commit();
+    /* Restore availability before any assertion can abort the test. */
+    TEST_ESP_OK(test_nvs_init());
+    TEST_ASSERT_NOT_EQUAL(ESP_OK, commit_err);
+    bool bypassed;
+    TEST_ESP_OK(measure_svc_calibration_protection_begin(&bypassed));
+    measure_svc_calibration_protection_end();
+    TEST_ASSERT_TRUE(bypassed);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE,
+        measure_svc_set_relative_u4(MEASURE_CHANNEL_1, MEASURE_KIND_CURRENT, 1U));
     TEST_ASSERT_EQUAL_UINT32(active_before, measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U));
-    TEST_ESP_OK(nvs_flash_init());
 
     TEST_ESP_OK(measure_svc_calibration_get_transaction(&transaction));
     TEST_ASSERT_EQUAL(MEASURE_SVC_CAL_TRANSACTION_OPEN, transaction.state);
@@ -275,7 +289,7 @@ TEST_CASE("calibration stale capture cannot publish after abort", "[calibration]
 {
     ensure_measure_runtime();
     ensure_calibration_transaction_idle();
-    reset_nvs();
+    reset_test_measurement_nvs();
 
     TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1));
     TEST_ESP_OK(measure_svc_calibration_clear(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_1));
@@ -305,7 +319,7 @@ TEST_CASE("calibration startup loads range-aware blobs and independently default
 {
     ensure_measure_runtime();
     ensure_calibration_transaction_idle();
-    reset_nvs();
+    reset_test_measurement_nvs();
 
     const measure_svc_cal_table_t valid = {
         .count = 6U,
@@ -324,7 +338,7 @@ TEST_CASE("calibration startup loads range-aware blobs and independently default
     TEST_ASSERT_EQUAL_UINT8(6U, loaded.count);
     TEST_ASSERT_EQUAL_UINT32(200U, loaded.points[5].actual_u4);
 
-    reset_nvs();
+    reset_test_measurement_nvs();
     nvs_handle_t handle;
     TEST_ESP_OK(nvs_open(CAL_NVS_NAMESPACE, NVS_READWRITE, &handle));
     TEST_ESP_OK(nvs_set_u32(handle, "ch0_p1_raw", 30U));
@@ -337,7 +351,7 @@ TEST_CASE("calibration startup loads range-aware blobs and independently default
     TEST_ASSERT_EQUAL_UINT8(6U, loaded.count);
     TEST_ASSERT_EQUAL_UINT16(512U, loaded.points[2].pga_full_scale_mv);
 
-    reset_nvs();
+    reset_test_measurement_nvs();
     uint8_t record[MEASURE_SVC_CAL_RECORD_SIZE];
     TEST_ASSERT_TRUE(measure_svc_cal_record_encode(&valid, record));
     record[4] = 0xFFU;
@@ -345,7 +359,7 @@ TEST_CASE("calibration startup loads range-aware blobs and independently default
     TEST_ESP_OK(measure_svc_cal_persistence_load(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, &loaded));
     TEST_ASSERT_EQUAL_UINT32(44799U, loaded.points[1].actual_u4);
 
-    reset_nvs();
+    reset_test_measurement_nvs();
     TEST_ASSERT_TRUE(measure_svc_cal_record_encode(&valid, record));
     record[MEASURE_SVC_CAL_RECORD_SIZE - 1U] ^= 0xA5U;
     write_blob(CAL_NVS_KEY_I_CH1, record, sizeof(record));

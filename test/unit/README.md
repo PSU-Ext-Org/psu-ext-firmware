@@ -114,3 +114,28 @@ temperature sensor` in this test application's menuconfig (with PSRAM enabled),
 then build and select `[mlx90614]`. No physical sensor is required; driver and
 PSRAM allocation failures are injected only during the relevant test case.
 The display and pyrometer test groups are independently omitted when disabled.
+
+## REL and calibration protection tests
+
+Select `[rel]` for REL parsing, scalar subtraction/history isolation, calibration
+clearing, transaction synchronization, and protection bypass/resumption tests.
+The `[output]` tests drive the real CH1 relay; disconnect the load before running.
+The calibration lifecycle/failure tests also check protection resumption after
+commit and continued bypass after persistence failure. These tests run on the
+ESP32-S3 Unity target; a successful build alone does not execute them.
+
+## Saved calibration protection
+
+The unit runner redirects all `meas_cfg` NVS opens (including calibration service
+commits and direct persistence tests) to the dedicated `test_meas_cfg` namespace.
+It clears only that test namespace at startup and when a fixture requests a
+reset. Saved production calibration is neither modified nor used as test input.
+The redirect also isolates measurement settings such as averaging and ADC rate.
+
+Whole-partition NVS erase calls are blocked in the test executable, including
+recovery calls from services. NVS initialization errors stop the runner or fail
+the test instead of erasing saved data. No backup/restore cleanup is required to
+protect calibration after an assertion failure or device reset. Alternative test
+runners must link the same support source and linker wrappers from
+`main/CMakeLists.txt`. Other settings (for example MQTT and protection limits)
+can still be modified by their integration tests.

@@ -1,0 +1,565 @@
+{
+  "components/scpi_handler/scpi_handler_calibration.c": {
+    "command_cal_star": [
+      "CAL:STAR",
+      "CAL:START",
+      "CALIBRATION:STAR",
+      "CALIBRATION:START",
+      ":CAL:STAR",
+      ":CAL:START",
+      ":CALIBRATION:STAR",
+      ":CALIBRATION:START"
+    ],
+    "command_cal_comm": [
+      "CAL:COMM",
+      "CAL:COMMIT",
+      "CALIBRATION:COMM",
+      "CALIBRATION:COMMIT",
+      ":CAL:COMM",
+      ":CAL:COMMIT",
+      ":CALIBRATION:COMM",
+      ":CALIBRATION:COMMIT"
+    ],
+    "command_cal_abor": [
+      "CAL:ABOR",
+      "CAL:ABORT",
+      "CALIBRATION:ABOR",
+      "CALIBRATION:ABORT",
+      ":CAL:ABOR",
+      ":CAL:ABORT",
+      ":CALIBRATION:ABOR",
+      ":CALIBRATION:ABORT"
+    ],
+    "command_cal_tran_query": [
+      "CAL:TRAN?",
+      "CAL:TRANSACTION?",
+      "CALIBRATION:TRAN?",
+      "CALIBRATION:TRANSACTION?",
+      ":CAL:TRAN?",
+      ":CAL:TRANSACTION?",
+      ":CALIBRATION:TRAN?",
+      ":CALIBRATION:TRANSACTION?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_calibration_points.c": {
+    "command_cal_volt": [
+      "CAL:VOLT",
+      "CAL:VOLTAGE",
+      "CALIBRATION:VOLT",
+      "CALIBRATION:VOLTAGE",
+      ":CAL:VOLT",
+      ":CAL:VOLTAGE",
+      ":CALIBRATION:VOLT",
+      ":CALIBRATION:VOLTAGE"
+    ],
+    "command_cal_volt_query": [
+      "CAL:VOLT?",
+      "CAL:VOLTAGE?",
+      "CALIBRATION:VOLT?",
+      "CALIBRATION:VOLTAGE?",
+      ":CAL:VOLT?",
+      ":CAL:VOLTAGE?",
+      ":CALIBRATION:VOLT?",
+      ":CALIBRATION:VOLTAGE?"
+    ],
+    "command_cal_volt_cle": [
+      "CAL:VOLT:CLE",
+      "CAL:VOLT:CLEAR",
+      "CAL:VOLTAGE:CLE",
+      "CAL:VOLTAGE:CLEAR",
+      "CALIBRATION:VOLT:CLE",
+      "CALIBRATION:VOLT:CLEAR",
+      "CALIBRATION:VOLTAGE:CLE",
+      "CALIBRATION:VOLTAGE:CLEAR",
+      ":CAL:VOLT:CLE",
+      ":CAL:VOLT:CLEAR",
+      ":CAL:VOLTAGE:CLE",
+      ":CAL:VOLTAGE:CLEAR",
+      ":CALIBRATION:VOLT:CLE",
+      ":CALIBRATION:VOLT:CLEAR",
+      ":CALIBRATION:VOLTAGE:CLE",
+      ":CALIBRATION:VOLTAGE:CLEAR"
+    ],
+    "command_cal_volt_coun_query": [
+      "CAL:VOLT:COUN?",
+      "CAL:VOLT:COUNT?",
+      "CAL:VOLTAGE:COUN?",
+      "CAL:VOLTAGE:COUNT?",
+      "CALIBRATION:VOLT:COUN?",
+      "CALIBRATION:VOLT:COUNT?",
+      "CALIBRATION:VOLTAGE:COUN?",
+      "CALIBRATION:VOLTAGE:COUNT?",
+      ":CAL:VOLT:COUN?",
+      ":CAL:VOLT:COUNT?",
+      ":CAL:VOLTAGE:COUN?",
+      ":CAL:VOLTAGE:COUNT?",
+      ":CALIBRATION:VOLT:COUN?",
+      ":CALIBRATION:VOLT:COUNT?",
+      ":CALIBRATION:VOLTAGE:COUN?",
+      ":CALIBRATION:VOLTAGE:COUNT?"
+    ],
+    "command_cal_curr": [
+      "CAL:CURR",
+      "CAL:CURRENT",
+      "CALIBRATION:CURR",
+      "CALIBRATION:CURRENT",
+      ":CAL:CURR",
+      ":CAL:CURRENT",
+      ":CALIBRATION:CURR",
+      ":CALIBRATION:CURRENT"
+    ],
+    "command_cal_curr_query": [
+      "CAL:CURR?",
+      "CAL:CURRENT?",
+      "CALIBRATION:CURR?",
+      "CALIBRATION:CURRENT?",
+      ":CAL:CURR?",
+      ":CAL:CURRENT?",
+      ":CALIBRATION:CURR?",
+      ":CALIBRATION:CURRENT?"
+    ],
+    "command_cal_curr_cle": [
+      "CAL:CURR:CLE",
+      "CAL:CURR:CLEAR",
+      "CAL:CURRENT:CLE",
+      "CAL:CURRENT:CLEAR",
+      "CALIBRATION:CURR:CLE",
+      "CALIBRATION:CURR:CLEAR",
+      "CALIBRATION:CURRENT:CLE",
+      "CALIBRATION:CURRENT:CLEAR",
+      ":CAL:CURR:CLE",
+      ":CAL:CURR:CLEAR",
+      ":CAL:CURRENT:CLE",
+      ":CAL:CURRENT:CLEAR",
+      ":CALIBRATION:CURR:CLE",
+      ":CALIBRATION:CURR:CLEAR",
+      ":CALIBRATION:CURRENT:CLE",
+      ":CALIBRATION:CURRENT:CLEAR"
+    ],
+    "command_cal_curr_coun_query": [
+      "CAL:CURR:COUN?",
+      "CAL:CURR:COUNT?",
+      "CAL:CURRENT:COUN?",
+      "CAL:CURRENT:COUNT?",
+      "CALIBRATION:CURR:COUN?",
+      "CALIBRATION:CURR:COUNT?",
+      "CALIBRATION:CURRENT:COUN?",
+      "CALIBRATION:CURRENT:COUNT?",
+      ":CAL:CURR:COUN?",
+      ":CAL:CURR:COUNT?",
+      ":CAL:CURRENT:COUN?",
+      ":CAL:CURRENT:COUNT?",
+      ":CALIBRATION:CURR:COUN?",
+      ":CALIBRATION:CURR:COUNT?",
+      ":CALIBRATION:CURRENT:COUN?",
+      ":CALIBRATION:CURRENT:COUNT?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_data.c": {
+    "command_meas_volt_data_query": [
+      "MEAS:VOLT:DATA?"
+    ],
+    "command_meas_curr_data_query": [
+      "MEAS:CURR:DATA?"
+    ],
+    "command_meas_power_data_query": [
+      "MEAS:POWER:DATA?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_measure.c": {
+    "command_meas_volt_query": [
+      "MEAS:VOLT?"
+    ],
+    "command_meas_curr_query": [
+      "MEAS:CURR?"
+    ],
+    "command_meas_power_query": [
+      "MEAS:POWER?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_measure_config.c": {
+    "command_meas_adc_rate": [
+      "MEAS:ADC:RATE",
+      "MEASURE:ADC:RATE"
+    ],
+    "command_meas_adc_rate_query": [
+      "MEAS:ADC:RATE?",
+      "MEASURE:ADC:RATE?"
+    ],
+    "command_meas_volt_aver_coun": [
+      "MEAS:VOLT:AVER:COUN"
+    ],
+    "command_meas_volt_aver_coun_query": [
+      "MEAS:VOLT:AVER:COUN?"
+    ],
+    "command_meas_curr_aver_coun": [
+      "MEAS:CURR:AVER:COUN"
+    ],
+    "command_meas_curr_aver_coun_query": [
+      "MEAS:CURR:AVER:COUN?"
+    ],
+    "command_meas_power_aver_coun": [
+      "MEAS:POWER:AVER:COUN"
+    ],
+    "command_meas_power_aver_coun_query": [
+      "MEAS:POWER:AVER:COUN?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_mqtt.c": {
+    "command_syst_mqtt_uri": [
+      "SYST:MQTT:URI",
+      "SYSTEM:MQTT:URI",
+      ":SYST:MQTT:URI",
+      ":SYSTEM:MQTT:URI"
+    ],
+    "command_syst_mqtt_uri_query": [
+      "SYST:MQTT:URI?",
+      "SYSTEM:MQTT:URI?",
+      ":SYST:MQTT:URI?",
+      ":SYSTEM:MQTT:URI?"
+    ],
+    "command_syst_mqtt_user": [
+      "SYST:MQTT:USER",
+      "SYSTEM:MQTT:USER",
+      ":SYST:MQTT:USER",
+      ":SYSTEM:MQTT:USER"
+    ],
+    "command_syst_mqtt_user_query": [
+      "SYST:MQTT:USER?",
+      "SYSTEM:MQTT:USER?",
+      ":SYST:MQTT:USER?",
+      ":SYSTEM:MQTT:USER?"
+    ],
+    "command_syst_mqtt_pass": [
+      "SYST:MQTT:PASS",
+      "SYSTEM:MQTT:PASS",
+      ":SYST:MQTT:PASS",
+      ":SYSTEM:MQTT:PASS",
+      "SYST:MQTT:PASSWORD",
+      "SYSTEM:MQTT:PASSWORD",
+      ":SYST:MQTT:PASSWORD",
+      ":SYSTEM:MQTT:PASSWORD"
+    ],
+    "command_syst_mqtt_pass_query": [
+      "SYST:MQTT:PASS?",
+      "SYSTEM:MQTT:PASS?",
+      ":SYST:MQTT:PASS?",
+      ":SYSTEM:MQTT:PASS?",
+      "SYST:MQTT:PASSWORD?",
+      "SYSTEM:MQTT:PASSWORD?",
+      ":SYST:MQTT:PASSWORD?",
+      ":SYSTEM:MQTT:PASSWORD?"
+    ],
+    "command_syst_mqtt_enab": [
+      "SYST:MQTT:ENAB",
+      "SYSTEM:MQTT:ENAB",
+      ":SYST:MQTT:ENAB",
+      ":SYSTEM:MQTT:ENAB",
+      "SYST:MQTT:ENABLE",
+      "SYSTEM:MQTT:ENABLE",
+      ":SYST:MQTT:ENABLE",
+      ":SYSTEM:MQTT:ENABLE"
+    ],
+    "command_syst_mqtt_enab_query": [
+      "SYST:MQTT:ENAB?",
+      "SYSTEM:MQTT:ENAB?",
+      ":SYST:MQTT:ENAB?",
+      ":SYSTEM:MQTT:ENAB?",
+      "SYST:MQTT:ENABLE?",
+      "SYSTEM:MQTT:ENABLE?",
+      ":SYST:MQTT:ENABLE?",
+      ":SYSTEM:MQTT:ENABLE?"
+    ],
+    "command_syst_mqtt_int": [
+      "SYST:MQTT:INT",
+      "SYSTEM:MQTT:INT",
+      ":SYST:MQTT:INT",
+      ":SYSTEM:MQTT:INT",
+      "SYST:MQTT:INTERVAL",
+      "SYSTEM:MQTT:INTERVAL",
+      ":SYST:MQTT:INTERVAL",
+      ":SYSTEM:MQTT:INTERVAL"
+    ],
+    "command_syst_mqtt_int_query": [
+      "SYST:MQTT:INT?",
+      "SYSTEM:MQTT:INT?",
+      ":SYST:MQTT:INT?",
+      ":SYSTEM:MQTT:INT?",
+      "SYST:MQTT:INTERVAL?",
+      "SYSTEM:MQTT:INTERVAL?",
+      ":SYST:MQTT:INTERVAL?",
+      ":SYSTEM:MQTT:INTERVAL?"
+    ],
+    "command_syst_mqtt_pref": [
+      "SYST:MQTT:PREF",
+      "SYSTEM:MQTT:PREF",
+      ":SYST:MQTT:PREF",
+      ":SYSTEM:MQTT:PREF",
+      "SYST:MQTT:PREFIX",
+      "SYSTEM:MQTT:PREFIX",
+      ":SYST:MQTT:PREFIX",
+      ":SYSTEM:MQTT:PREFIX"
+    ],
+    "command_syst_mqtt_pref_query": [
+      "SYST:MQTT:PREF?",
+      "SYSTEM:MQTT:PREF?",
+      ":SYST:MQTT:PREF?",
+      ":SYSTEM:MQTT:PREF?",
+      "SYST:MQTT:PREFIX?",
+      "SYSTEM:MQTT:PREFIX?",
+      ":SYST:MQTT:PREFIX?",
+      ":SYSTEM:MQTT:PREFIX?"
+    ],
+    "command_syst_mqtt_stat_query": [
+      "SYST:MQTT:STAT?",
+      "SYSTEM:MQTT:STAT?",
+      ":SYST:MQTT:STAT?",
+      ":SYSTEM:MQTT:STAT?",
+      "SYST:MQTT:STATUS?",
+      "SYSTEM:MQTT:STATUS?",
+      ":SYST:MQTT:STATUS?",
+      ":SYSTEM:MQTT:STATUS?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_output.c": {
+    "command_outp": [
+      "OUTP"
+    ],
+    "command_outp_query": [
+      "OUTP?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_protection.c": {
+    "command_ovp": [
+      "OVP",
+      ":SOURCE:OVP",
+      ":SOUR:OVP",
+      "SOURCE:OVP",
+      "SOUR:OVP"
+    ],
+    "command_ovp_query": [
+      "OVP?",
+      ":SOURCE:OVP?",
+      ":SOUR:OVP?",
+      "SOURCE:OVP?",
+      "SOUR:OVP?"
+    ],
+    "command_ocp": [
+      "OCP",
+      ":SOURCE:OCP",
+      ":SOUR:OCP",
+      "SOURCE:OCP",
+      "SOUR:OCP"
+    ],
+    "command_ocp_query": [
+      "OCP?",
+      ":SOURCE:OCP?",
+      ":SOUR:OCP?",
+      "SOURCE:OCP?",
+      "SOUR:OCP?"
+    ],
+    "command_ocp_state": [
+      "OCP:STATE",
+      ":SOURCE:OCP:STATE",
+      ":SOUR:OCP:STATE",
+      "SOURCE:OCP:STATE",
+      "SOUR:OCP:STATE",
+      "OCP:STAT",
+      ":SOURCE:OCP:STAT",
+      ":SOUR:OCP:STAT",
+      "SOURCE:OCP:STAT",
+      "SOUR:OCP:STAT"
+    ],
+    "command_ocp_state_query": [
+      "OCP:STATE?",
+      ":SOURCE:OCP:STATE?",
+      ":SOUR:OCP:STATE?",
+      "SOURCE:OCP:STATE?",
+      "SOUR:OCP:STATE?",
+      "OCP:STAT?",
+      ":SOURCE:OCP:STAT?",
+      ":SOUR:OCP:STAT?",
+      "SOURCE:OCP:STAT?",
+      "SOUR:OCP:STAT?"
+    ],
+    "command_ovp_protect_state_query": [
+      "OVP:PROTECT:STATE?",
+      ":SOURCE:OVP:PROTECT:STATE?",
+      ":SOUR:OVP:PROTECT:STATE?",
+      "SOURCE:OVP:PROTECT:STATE?",
+      "SOUR:OVP:PROTECT:STATE?",
+      "OVP:PROT:STAT?",
+      ":SOURCE:OVP:PROT:STAT?",
+      ":SOUR:OVP:PROT:STAT?",
+      "SOURCE:OVP:PROT:STAT?",
+      "SOUR:OVP:PROT:STAT?"
+    ],
+    "command_ocp_protect_state_query": [
+      "OCP:PROTECT:STATE?",
+      ":SOURCE:OCP:PROTECT:STATE?",
+      ":SOUR:OCP:PROTECT:STATE?",
+      "SOURCE:OCP:PROTECT:STATE?",
+      "SOUR:OCP:PROTECT:STATE?",
+      "OCP:PROT:STAT?",
+      ":SOURCE:OCP:PROT:STAT?",
+      ":SOUR:OCP:PROT:STAT?",
+      "SOURCE:OCP:PROT:STAT?",
+      "SOUR:OCP:PROT:STAT?"
+    ],
+    "command_reset_protect": [
+      "RESET:PROTECT",
+      ":SOURCE:RESET:PROTECT",
+      ":SOUR:RESET:PROTECT",
+      "SOURCE:RESET:PROTECT",
+      "SOUR:RESET:PROTECT",
+      "RESET:PROT",
+      ":SOURCE:RESET:PROT",
+      ":SOUR:RESET:PROT",
+      "SOURCE:RESET:PROT",
+      "SOUR:RESET:PROT"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_relative.c": {
+    "command_meas_volt_rel": [
+      "MEAS:VOLT:REL"
+    ],
+    "command_meas_volt_rel_query": [
+      "MEAS:VOLT:REL?"
+    ],
+    "command_meas_curr_rel": [
+      "MEAS:CURR:REL"
+    ],
+    "command_meas_curr_rel_query": [
+      "MEAS:CURR:REL?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_system.c": {
+    "command_idn_query": [
+      "*IDN?"
+    ],
+    "command_syst_err_query": [
+      "SYST:ERR?",
+      "SYSTEM:ERROR?",
+      ":SYST:ERR?",
+      ":SYSTEM:ERROR?"
+    ],
+    "command_syst_datetime": [
+      "SYST:DATETIME",
+      "SYSTEM:DATETIME",
+      ":SYST:DATETIME",
+      ":SYSTEM:DATETIME"
+    ],
+    "command_syst_datetime_query": [
+      "SYST:DATETIME?",
+      "SYSTEM:DATETIME?",
+      ":SYST:DATETIME?",
+      ":SYSTEM:DATETIME?"
+    ],
+    "command_syst_datetime_map_query": [
+      "SYST:DATETIME:MAP?",
+      "SYSTEM:DATETIME:MAP?",
+      ":SYST:DATETIME:MAP?",
+      ":SYSTEM:DATETIME:MAP?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_timer.c": {
+    "command_tim_add": [
+      "TIM:ADD",
+      "TIMER:ADD",
+      ":TIM:ADD",
+      ":TIMER:ADD"
+    ],
+    "command_tim_clear": [
+      "TIM:CLEAR",
+      "TIMER:CLEAR",
+      ":TIM:CLEAR",
+      ":TIMER:CLEAR",
+      "TIM:CLE",
+      "TIMER:CLE",
+      ":TIM:CLE",
+      ":TIMER:CLE"
+    ],
+    "command_tim_start": [
+      "TIM:START",
+      "TIMER:START",
+      ":TIM:START",
+      ":TIMER:START",
+      "TIM:STAR",
+      "TIMER:STAR",
+      ":TIM:STAR",
+      ":TIMER:STAR"
+    ],
+    "command_tim_pause": [
+      "TIM:PAUSE",
+      "TIMER:PAUSE",
+      ":TIM:PAUSE",
+      ":TIMER:PAUSE",
+      "TIM:PAUS",
+      "TIMER:PAUS",
+      ":TIM:PAUS",
+      ":TIMER:PAUS"
+    ],
+    "command_tim_status_query": [
+      "TIM:STATUS?",
+      "TIMER:STATUS?",
+      ":TIM:STATUS?",
+      ":TIMER:STATUS?",
+      "TIM:STAT?",
+      "TIMER:STAT?",
+      ":TIM:STAT?",
+      ":TIMER:STAT?"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_trigger.c": {
+    "command_trig_conf_query": [
+      "TRIG:CONF?"
+    ],
+    "command_trig_conf": [
+      "TRIG:CONF"
+    ]
+  },
+  "components/scpi_handler/scpi_handler_wifi.c": {
+    "command_wifi_ssid": [
+      "WIFI:SSID"
+    ],
+    "command_wifi_ssid_query": [
+      "WIFI:SSID?"
+    ],
+    "command_wifi_pass": [
+      "WIFI:PASS"
+    ],
+    "command_wifi_pass_query": [
+      "WIFI:PASS?"
+    ],
+    "command_wifi_clear": [
+      "WIFI:CLEAR"
+    ],
+    "command_wifi_status_query": [
+      "WIFI:STATUS?"
+    ]
+  },
+  "components/i2c_1_modules/mlx90614/mlx90614_module.c": {
+    "mlx90614_query_temperature": [
+      "EXT:MEAS:TEMP?",
+      "EXT:MEASURE:TEMP?",
+      "EXT:MEAS:TEMPERATURE?",
+      "EXT:MEASURE:TEMPERATURE?"
+    ],
+    "mlx90614_query_history": [
+      "EXT:MEAS:TEMP:DATA?",
+      "EXT:MEASURE:TEMP:DATA?",
+      "EXT:MEAS:TEMPERATURE:DATA?",
+      "EXT:MEASURE:TEMPERATURE:DATA?"
+    ]
+  },
+  "components/i2c_1_modules/ssd1306/core/ssd1306_views.c": {
+    "select_view": [
+      "EXT:DISPL:VIEW",
+      "EXT:DISPLAY:VIEW"
+    ],
+    "query_view": [
+      "EXT:DISPL:VIEW?",
+      "EXT:DISPLAY:VIEW?"
+    ]
+  }
+}

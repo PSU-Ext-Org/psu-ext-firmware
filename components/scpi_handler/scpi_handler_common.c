@@ -19,7 +19,7 @@
  * @brief Shared SCPI parsing, formatting, and response helper functions.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -92,16 +92,6 @@ void scpi_handler_parse_command(char *command, scpi_handler_parsed_command_t *pa
 
     parsed->argument = command;
     scpi_handler_trim_trailing(parsed->argument);
-}
-
-void scpi_handler_write_esp_error(
-    scpi_handler_write_response_fn_t write_response,
-    const char *context,
-    esp_err_t err)
-{
-    char response[96];
-    snprintf(response, sizeof(response), "ERR,\"%s failed: %s\"", context, esp_err_to_name(err));
-    write_response(response);
 }
 
 bool scpi_handler_parse_measure_channel(
@@ -228,36 +218,4 @@ bool scpi_handler_parse_seconds_to_ms(const char *argument, uint32_t *value_ms)
 
     *value_ms = (uint32_t)scaled_ms;
     return true;
-}
-
-void scpi_handler_format_value_u4(
-    uint32_t value_u4,
-    char *response,
-    size_t response_size)
-{
-    snprintf(
-        response,
-        response_size,
-        "%" PRIu32 ".%04" PRIu32,
-        value_u4 / SCPI_HANDLER_VALUE_SCALE_U4,
-        value_u4 % SCPI_HANDLER_VALUE_SCALE_U4);
-}
-
-size_t scpi_handler_decimal_digits(size_t value)
-{
-    size_t digits = 1U;
-    while (value >= 10U) {
-        value /= 10U;
-        digits++;
-    }
-
-    return digits;
-}
-
-void scpi_handler_write_u32_le(uint8_t *destination, uint32_t value)
-{
-    destination[0] = (uint8_t)(value & 0xFFU);
-    destination[1] = (uint8_t)((value >> 8) & 0xFFU);
-    destination[2] = (uint8_t)((value >> 16) & 0xFFU);
-    destination[3] = (uint8_t)((value >> 24) & 0xFFU);
 }

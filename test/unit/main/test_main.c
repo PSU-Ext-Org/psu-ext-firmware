@@ -15,8 +15,16 @@
  */
 
 #include "unity.h"
+#include "test_nvs.h"
+#include <stdio.h>
 
 void app_main(void)
 {
+    const esp_err_t err = test_nvs_reset_measurement();
+    if (err != ESP_OK) {
+        printf("Test NVS initialization failed (%s); saved NVS was not erased.\n",
+            esp_err_to_name(err));
+        return;
+    }
     unity_run_menu();
 }

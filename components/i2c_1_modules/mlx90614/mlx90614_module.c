@@ -34,14 +34,8 @@ esp_err_t mlx90614_module_register_commands(void)
 {
     static bool registered;
     static const scpi_handler_command_t commands[] = {
-        {"EXT:MEAS:TEMP?", mlx90614_query_temperature, &s_state},
-        {"EXT:MEASURE:TEMP?", mlx90614_query_temperature, &s_state},
-        {"EXT:MEAS:TEMPERATURE?", mlx90614_query_temperature, &s_state},
-        {"EXT:MEASURE:TEMPERATURE?", mlx90614_query_temperature, &s_state},
-        {"EXT:MEAS:TEMP:DATA?", mlx90614_query_history, &s_state},
-        {"EXT:MEASURE:TEMP:DATA?", mlx90614_query_history, &s_state},
-        {"EXT:MEAS:TEMPERATURE:DATA?", mlx90614_query_history, &s_state},
-        {"EXT:MEASURE:TEMPERATURE:DATA?", mlx90614_query_history, &s_state},
+        {"EXT:(MEAS|MEASURE):(TEMP|TEMPERATURE)?", mlx90614_query_temperature, &s_state},
+        {"EXT:(MEAS|MEASURE):(TEMP|TEMPERATURE):DATA?", mlx90614_query_history, &s_state},
     };
     if (registered) {
         return ESP_OK;
@@ -57,7 +51,7 @@ esp_err_t mlx90614_module_register_commands(void)
     if (s_state.history_lock == NULL || s_state.response_lock == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    esp_err_t err = scpi_handler_register_commands(commands, sizeof(commands) / sizeof(commands[0]));
+    esp_err_t err = scpi_handler_register_patterns(commands, sizeof(commands) / sizeof(commands[0]));
     registered = err == ESP_OK;
     return err;
 }

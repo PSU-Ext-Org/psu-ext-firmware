@@ -57,17 +57,34 @@ enum { SCPI_HANDLER_MAX_REGISTERED_COMMANDS = 32 };
 
 /** Register an entire command table atomically, without heap allocation.
  * Keywords must be uppercase literal command names (including '?' for queries).
- * Register short and long spellings separately; pattern expansion is not used.
+ * Register short and long spellings separately, or use
+ * scpi_handler_register_patterns().
  * Entries are copied; keyword strings must stay immutable until reboot, and
  * callback context must remain valid until reboot. Keywords are at most 127 bytes.
  * Registration is safe alongside dispatch; callbacks run outside the registry
  * lock. Built-in commands take priority and cannot be overridden.
  * Returns ESP_ERR_INVALID_ARG for invalid entries or duplicate table keywords,
- * ESP_ERR_INVALID_STATE for an already registered keyword, and ESP_ERR_NO_MEM
- * when the fixed registry is full. Failures leave the registry unchanged.
+ * ESP_ERR_INVALID_STATE for an already registered keyword (including a pattern
+ * alias), and ESP_ERR_NO_MEM when the fixed registry is full. Failures leave the registry unchanged.
  * There is no unregister operation; register once during module startup.
  */
 esp_err_t scpi_handler_register_commands(
+    const scpi_handler_command_t *commands,
+    size_t count);
+
+/** Register compact alias patterns using the same storage and callback contract
+ * as scpi_handler_register_commands(). keyword contains a pattern: [text] is
+ * optional; (A|B) selects explicit alternatives. Groups may nest four levels.
+ * Literal text is uppercase, including ':' and terminal '?' for queries.
+ * Matching consumes the entire keyword; abbreviations are never inferred.
+ * Patterns are at most 127 bytes and may expand to at most 256 nonempty literal
+ * keywords. Empty branches, malformed groups, and nonterminal '?' are invalid.
+ * Patterns and literal registrations share the 32-descriptor capacity. Aliases
+ * are not stored separately. Overlapping entries in the submitted table return
+ * ESP_ERR_INVALID_ARG; overlaps with registered entries return
+ * ESP_ERR_INVALID_STATE. Built-ins still take priority. Failure is atomic.
+ */
+esp_err_t scpi_handler_register_patterns(
     const scpi_handler_command_t *commands,
     size_t count);
 

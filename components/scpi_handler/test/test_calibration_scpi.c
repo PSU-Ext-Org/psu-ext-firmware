@@ -30,54 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static char s_last_response[96];
-static bool s_saw_response;
-
-static void capture_response(const char *response)
-{
-    s_saw_response = true;
-    strlcpy(s_last_response, response, sizeof(s_last_response));
-}
-
-static void ignore_binary(const uint8_t *data, size_t length)
-{
-    (void)data;
-    (void)length;
-}
-
-static void run_scpi(char *command)
-{
-    const scpi_handler_response_writer_t writer = {
-        .write_text = capture_response,
-        .write_binary = ignore_binary,
-    };
-    s_saw_response = false;
-    s_last_response[0] = '\0';
-    scpi_handler_handle_command(command, &writer);
-}
-
-static void ensure_runtime(void)
-{
-    static bool initialized;
-    if (initialized) {
-        return;
-    }
-
-    esp_err_t err = nvs_flash_init();
-    if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NVS_NEW_VERSION_FOUND)) {
-        TEST_ESP_OK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    TEST_ESP_OK(err);
-
-    const measure_svc_config_t config = {
-        .input_voltage_input = MEASURE_INPUT_ADS1115_AIN0,
-        .output_voltage_input = MEASURE_INPUT_ADS1115_AIN1,
-        .output_current_input = MEASURE_INPUT_ADS1115_AIN2,
-    };
-    TEST_ESP_OK(measure_svc_init_with_config(&config));
-    initialized = true;
-}
+#include "scpi_test_fixture.h"
 
 static void publish_zero_calibration_samples(void *context)
 {
@@ -170,50 +123,57 @@ TEST_CASE("calibration scpi reports transaction states and malformed commands", 
     TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
 }
 
-TEST_CASE("measurement ADC rate SCPI validates persists and blocks during calibration", "[measurement][scpi]")
+typedef struct {
+    SemaphoreHandle_t started;
+    SemaphoreHandle_t done;
+    esp_err_t result;
+} rel_start_task_t;
+
+static void start_calibration_while_guarded(void *context)
+{
+    rel_start_task_t *args = context;
+    xSemaphoreGive(args->started);
+    args->result = measure_svc_calibration_start(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1);
+    xSemaphoreGive(args->done);
+    vTaskDelete(NULL);
+}
+
+TEST_CASE("calibration start waits for in-flight protection and clears REL", "[rel][calibration][concurrency]")
 {
     ensure_runtime();
-    measure_svc_cal_transaction_t transaction;
-    TEST_ESP_OK(measure_svc_calibration_get_transaction(&transaction));
-    if (transaction.state == MEASURE_SVC_CAL_TRANSACTION_OPEN) {
-        TEST_ESP_OK(measure_svc_calibration_abort());
+    TEST_ESP_OK(measure_svc_set_relative_u4(MEASURE_CHANNEL_1, MEASURE_KIND_CURRENT, 2U));
+    rel_start_task_t args = {
+        .started = xSemaphoreCreateBinary(),
+        .done = xSemaphoreCreateBinary(),
+        .result = ESP_FAIL,
+    };
+    TEST_ASSERT_NOT_NULL(args.started);
+    TEST_ASSERT_NOT_NULL(args.done);
+    bool bypassed;
+    TEST_ESP_OK(measure_svc_calibration_protection_begin(&bypassed));
+    BaseType_t created = xTaskCreate(start_calibration_while_guarded, "rel_start", 4096,
+        &args, 5, NULL);
+    BaseType_t started = pdFALSE;
+    BaseType_t finished_early = pdFALSE;
+    if (created == pdPASS) {
+        started = xSemaphoreTake(args.started, pdMS_TO_TICKS(1000));
+        finished_early = xSemaphoreTake(args.done, pdMS_TO_TICKS(20));
     }
-
-    static const uint16_t rates[] = {8U, 16U, 32U, 64U, 128U, 250U, 475U, 860U};
-    for (size_t index = 0U; index < (sizeof(rates) / sizeof(rates[0])); ++index) {
-        char set_command[32];
-        snprintf(set_command, sizeof(set_command), "MEAS:ADC:RATE %u", (unsigned)rates[index]);
-        run_scpi(set_command);
-        TEST_ASSERT_FALSE(s_saw_response);
-
-        char query[] = "MEAS:ADC:RATE?";
-        char expected[8];
-        snprintf(expected, sizeof(expected), "%u", (unsigned)rates[index]);
-        run_scpi(query);
-        TEST_ASSERT_EQUAL_STRING(expected, s_last_response);
-    }
-
-    char invalid[] = "MEAS:ADC:RATE 9";
-    run_scpi(invalid);
-    TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
-    char unchanged[] = "MEAS:ADC:RATE?";
-    run_scpi(unchanged);
-    TEST_ASSERT_EQUAL_STRING("860", s_last_response);
-
-    nvs_handle_t handle;
-    uint16_t stored_rate = 0U;
-    TEST_ESP_OK(nvs_open("meas_cfg", NVS_READONLY, &handle));
-    TEST_ESP_OK(nvs_get_u16(handle, "ads_rate_sps", &stored_rate));
-    nvs_close(handle);
-    TEST_ASSERT_EQUAL_UINT16(860U, stored_rate);
-
-    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
-    char blocked[] = "MEAS:ADC:RATE 128";
-    run_scpi(blocked);
-    TEST_ASSERT_TRUE(strncmp(s_last_response, "ERR,", 4) == 0);
+    measure_svc_calibration_protection_end();
+    TEST_ASSERT_EQUAL(pdPASS, created);
+    BaseType_t finished = finished_early == pdTRUE ? pdTRUE :
+        xSemaphoreTake(args.done, pdMS_TO_TICKS(1000));
+    TEST_ASSERT_EQUAL(pdTRUE, finished);
+    vSemaphoreDelete(args.started);
+    vSemaphoreDelete(args.done);
+    TEST_ASSERT_EQUAL(pdTRUE, started);
+    TEST_ASSERT_EQUAL(pdFALSE, finished_early);
+    TEST_ASSERT_FALSE(bypassed);
+    TEST_ESP_OK(args.result);
+    uint32_t offset;
+    TEST_ESP_OK(measure_svc_get_relative_u4(MEASURE_CHANNEL_1, MEASURE_KIND_CURRENT, &offset));
+    TEST_ASSERT_EQUAL_UINT32(0U, offset);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE,
+        measure_svc_set_relative_u4(MEASURE_CHANNEL_1, MEASURE_KIND_CURRENT, 2U));
     TEST_ESP_OK(measure_svc_calibration_abort());
-
-    char restore[] = "MEAS:ADC:RATE 128";
-    run_scpi(restore);
-    TEST_ASSERT_FALSE(s_saw_response);
 }

@@ -12,4 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-idf_component_register(SRCS "test_main.c" PRIV_REQUIRES unity)
+idf_component_register(
+    SRCS "test_main.c" "../../support/test_nvs.c"
+    PRIV_INCLUDE_DIRS "../../support"
+    PRIV_REQUIRES unity nvs_flash
+)
+
+# Test-only isolation applies to all service and test translation units.
+# Production firmware never links these wrappers.
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+    "-Wl,--wrap=nvs_open"
+    "-Wl,--wrap=nvs_open_from_partition"
+    "-Wl,--wrap=nvs_flash_erase"
+    "-Wl,--wrap=nvs_flash_erase_partition"
+)

@@ -17,6 +17,7 @@ idf_component_register(
         "measure_prov_ads1115.c"
         "measure_svc_average.c"
         "measure_svc_calibration.c"
+        "measure_svc_relative.c"
         "measure_svc_calibration_capture.c"
         "measure_svc_calibration_persistence.c"
         "measure_svc_calibration_record.c"

@@ -114,10 +114,8 @@ esp_err_t ssd1306_register_scpi_commands(void)
 {
     /* Startup-only registration; subsequent calls reuse the registered table. */
     static const scpi_handler_command_t commands[] = {
-        {"EXT:DISPL:VIEW", select_view, NULL},
-        {"EXT:DISPL:VIEW?", query_view, NULL},
-        {"EXT:DISPLAY:VIEW", select_view, NULL},
-        {"EXT:DISPLAY:VIEW?", query_view, NULL},
+        {"EXT:(DISPL|DISPLAY):VIEW", select_view, NULL},
+        {"EXT:(DISPL|DISPLAY):VIEW?", query_view, NULL},
     };
     if (s_registered) {
         return ESP_OK;
@@ -126,7 +124,7 @@ esp_err_t ssd1306_register_scpi_commands(void)
     if (err != ESP_OK) {
         return err;
     }
-    err = scpi_handler_register_commands(commands, sizeof(commands) / sizeof(commands[0]));
+    err = scpi_handler_register_patterns(commands, sizeof(commands) / sizeof(commands[0]));
     if (err == ESP_OK) {
         s_registered = true;
     }
