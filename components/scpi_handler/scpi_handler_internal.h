@@ -268,6 +268,12 @@ bool scpi_handler_handle_timer_command(
     scpi_handler_parsed_command_t *parsed,
     scpi_handler_write_response_fn_t write_response);
 
+/** @brief Handle REL offset setters and queries for voltage/current. */
+bool scpi_handler_handle_relative_command(
+    const char *keyword,
+    scpi_handler_parsed_command_t *parsed,
+    scpi_handler_write_response_fn_t write_response);
+
 #ifdef __cplusplus
 }
 #endif

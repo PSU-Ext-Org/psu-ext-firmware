@@ -20,6 +20,8 @@
  */
 
 #include "measure_svc.h"
+#include "measure_svc_calibration.h"
+#include "../../measure_svc/measure_svc_event_bus.h"
 #include "measure_svc_samples.h"
 #include "output_ctrl.h"
 #include "protection_svc.h"
@@ -206,4 +208,43 @@ TEST_CASE("output scpi enable is blocked by CH0 input OVP", "[output][scpi]")
 
     TEST_ESP_OK(protection_svc_set_ovp_u4(PROTECTION_SVC_CHANNEL_CH0, original_ch0_ovp_u4));
     TEST_ESP_OK(protection_svc_clear_trips(PROTECTION_SVC_CHANNEL_CH0));
+}
+
+TEST_CASE("calibration bypasses voltage and hard current protection then resumes", "[output][calibration][rel]")
+{
+    ensure_output_runtime();
+    reset_output_off();
+    uint32_t old_ch0, old_ch1, old_ocp;
+    TEST_ESP_OK(protection_svc_get_ovp_u4(0, &old_ch0));
+    TEST_ESP_OK(protection_svc_get_ovp_u4(1, &old_ch1));
+    TEST_ESP_OK(protection_svc_get_ocp_u4(1, &old_ocp));
+    TEST_ESP_OK(protection_svc_set_ovp_u4(0, 0));
+    TEST_ESP_OK(protection_svc_set_ovp_u4(1, 0));
+    TEST_ESP_OK(protection_svc_set_ocp_u4(1, 0));
+    TEST_ESP_OK(measure_svc_calibration_start(MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0));
+    TEST_ESP_OK(protection_svc_check_ch1_enable_allowed());
+    TEST_ESP_OK(protection_svc_set_ch1_output(true, OUTPUT_CTRL_CHANGE_CAUSE_SCPI));
+    for (unsigned kind = 0; kind < 2; ++kind) {
+        const measure_svc_sample_event_t event = {
+            .channel = MEASURE_CHANNEL_1, .kind = (measure_kind_t)kind,
+            .value_u4 = UINT32_MAX, .precise_u4 = UINT32_MAX,
+        };
+        measure_svc_event_bus_publish(&event);
+        assert_output_query("1");
+    }
+    TEST_ESP_OK(measure_svc_calibration_abort());
+    for (unsigned kind = 0; kind < 2; ++kind) {
+        TEST_ESP_OK(output_ctrl_set(1, true));
+        const measure_svc_sample_event_t event = {
+            .channel = MEASURE_CHANNEL_1, .kind = (measure_kind_t)kind,
+            .value_u4 = UINT32_MAX, .precise_u4 = UINT32_MAX,
+        };
+        measure_svc_event_bus_publish(&event);
+        assert_output_query("0");
+    }
+    TEST_ESP_OK(protection_svc_set_ovp_u4(0, old_ch0));
+    TEST_ESP_OK(protection_svc_set_ovp_u4(1, old_ch1));
+    TEST_ESP_OK(protection_svc_set_ocp_u4(1, old_ocp));
+    TEST_ESP_OK(protection_svc_clear_trips(0));
+    TEST_ESP_OK(protection_svc_clear_trips(1));
 }

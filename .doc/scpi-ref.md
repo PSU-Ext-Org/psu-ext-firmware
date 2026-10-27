@@ -41,6 +41,10 @@ Scalar readings return decimal values with four fractional digits.
 |---|---|---|
 | `MEAS:VOLT? <channel>` | `<volts>` | `0`/`CH0` reads input voltage. `1`/`CH1` reads output voltage. |
 | `MEAS:CURR? CH1` | `<amps>` | `1` is also accepted. `CH0` is rejected. |
+| `MEAS:VOLT:REL <channel>,<volts>` | none | Set RAM-only voltage REL offset for CH0/CH1; zero clears it. |
+| `MEAS:VOLT:REL? <channel>` | `<volts>` | Query voltage REL offset, four decimal places. |
+| `MEAS:CURR:REL CH1,<amps>` | none | Set RAM-only current REL offset; zero clears it. |
+| `MEAS:CURR:REL? CH1` | `<amps>` | Query current REL offset, four decimal places. |
 | `MEAS:POWER? CH1` | `<watts>` | `1` is also accepted. `CH0` is rejected. |
 | `MEAS:ADC:RATE <sps>` | none | Sets the persisted ADS1115 conversion rate. Accepted values: `8`, `16`, `32`, `64`, `128`, `250`, `475`, or `860`. `MEASURE:ADC:RATE` is also accepted. |
 | `MEAS:ADC:RATE?` | `<sps>` | Returns the active ADS1115 conversion rate. `MEASURE:ADC:RATE?` is also accepted. |
@@ -311,3 +315,31 @@ ESP-IDF errors are formatted as:
 ```text
 ERR,"<context> failed: <ESP_ERR_NAME>"
 ```
+
+## Relative voltage and current readings
+
+`MEAS:VOLT:REL <channel>,<volts>` sets a REL offset for `CH0` or `CH1`.
+`MEAS:CURR:REL CH1,<amps>` sets the current offset. Numeric channel aliases
+`0` and `1` are accepted. Query the offset with `MEAS:VOLT:REL? <channel>`
+or `MEAS:CURR:REL? CH1`; responses have four decimal places.
+
+For example, `MEAS:CURR:REL CH1, 0.0002;` subtracts 0.0002 A from the
+averaged scalar current reading. `MEAS:CURR:REL CH1, 0` restores absolute
+readings. These REL commands accept an optional trailing semicolon, without
+command chaining. Offsets are nonnegative, rounded to four decimal places,
+and held only in RAM; reboot resets them to zero.
+
+REL affects scalar voltage/current SCPI queries and OLED voltage/current
+readings. Results below zero are clamped to zero. DATA queries and stored
+sample history, MQTT, calibration, and derived power remain absolute.
+
+A successful calibration transaction start clears all three REL offsets.
+Nonzero offsets are rejected while the transaction is OPEN or COMMITTING.
+Offsets remain zero after commit or abort; failed starts leave them unchanged.
+
+During calibration, **all OCP/OVP checks are bypassed**, including the hard
+current cutoff and the CH0 voltage check when enabling CH1. Protection settings,
+thresholds, existing trip flags, and relay state are not changed by starting
+calibration. Explicit output commands and timers continue to work. Protection
+resumes after successful commit or abort; a failed commit leaves the transaction
+open and protection bypassed. Resumed sample checks use absolute readings.

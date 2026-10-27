@@ -114,3 +114,12 @@ temperature sensor` in this test application's menuconfig (with PSRAM enabled),
 then build and select `[mlx90614]`. No physical sensor is required; driver and
 PSRAM allocation failures are injected only during the relevant test case.
 The display and pyrometer test groups are independently omitted when disabled.
+
+## REL and calibration protection tests
+
+Select `[rel]` for REL parsing, scalar subtraction/history isolation, calibration
+clearing, transaction synchronization, and protection bypass/resumption tests.
+The `[output]` tests drive the real CH1 relay; disconnect the load before running.
+The calibration lifecycle/failure tests also check protection resumption after
+commit and continued bypass after persistence failure. These tests run on the
+ESP32-S3 Unity target; a successful build alone does not execute them.

@@ -11,9 +11,11 @@ Calibration is transactional. A transaction targets exactly one table:
 - current `CH1`: output current
 
 Only one calibration transaction can be open device-wide. Point edits are
-volatile and affect staging only. Measurements, history, OVP, and OCP continue
-using the active committed tables until `CALibration:COMMit` succeeds. `ABORt`
-or reset before commit discards staged changes.
+volatile and affect staging only. Absolute measurements and history continue
+using the active committed tables until `CALibration:COMMit` succeeds. Starting
+a transaction clears all REL offsets and bypasses every OCP/OVP check, including
+the hard current cutoff, until successful commit or abort. `ABORt` or reset
+before commit discards staged changes.
 
 `CALibration:STARt` begins an empty replacement table: it does not retain points
 from the active calibration. At each point, the firmware discards two fresh
@@ -312,5 +314,33 @@ OVP:PROTect:STATe? CH1
 OCP:PROTect:STATe? CH1
 ```
 
-CH0 OVP is checked before enabling CH1 output. CH1 OVP and OCP trip the relay
-off during runtime monitoring.
+Outside a calibration transaction, CH0 OVP is checked before enabling CH1 output.
+CH1 OVP and OCP trip the relay off during runtime monitoring.
+
+## Relative voltage and current readings
+
+`MEAS:VOLT:REL <channel>,<volts>` sets a REL offset for `CH0` or `CH1`.
+`MEAS:CURR:REL CH1,<amps>` sets the current offset. Numeric channel aliases
+`0` and `1` are accepted. Query the offset with `MEAS:VOLT:REL? <channel>`
+or `MEAS:CURR:REL? CH1`; responses have four decimal places.
+
+For example, `MEAS:CURR:REL CH1, 0.0002;` subtracts 0.0002 A from the
+averaged scalar current reading. `MEAS:CURR:REL CH1, 0` restores absolute
+readings. These REL commands accept an optional trailing semicolon, without
+command chaining. Offsets are nonnegative, rounded to four decimal places,
+and held only in RAM; reboot resets them to zero.
+
+REL affects scalar voltage/current SCPI queries and OLED voltage/current
+readings. Results below zero are clamped to zero. DATA queries and stored
+sample history, MQTT, calibration, and derived power remain absolute.
+
+A successful calibration transaction start clears all three REL offsets.
+Nonzero offsets are rejected while the transaction is OPEN or COMMITTING.
+Offsets remain zero after commit or abort; failed starts leave them unchanged.
+
+During calibration, **all OCP/OVP checks are bypassed**, including the hard
+current cutoff and the CH0 voltage check when enabling CH1. Protection settings,
+thresholds, existing trip flags, and relay state are not changed by starting
+calibration. Explicit output commands and timers continue to work. Protection
+resumes after successful commit or abort; a failed commit leaves the transaction
+open and protection bypassed. Resumed sample checks use absolute readings.

@@ -74,6 +74,7 @@ void scpi_handler_handle_command(
 
     if (scpi_handler_handle_system_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_measure_command(keyword_upper, &parsed, writer) ||
+        scpi_handler_handle_relative_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_calibration_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_output_command(keyword_upper, &parsed, write_response) ||
         scpi_handler_handle_protection_command(keyword_upper, &parsed, write_response) ||

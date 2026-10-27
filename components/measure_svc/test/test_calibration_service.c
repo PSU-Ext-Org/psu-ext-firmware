@@ -225,6 +225,13 @@ TEST_CASE("calibration lifecycle edits staging and commits one target", "[calibr
         measure_svc_calibration_apply_target_u4(
             MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ESP_OK(measure_svc_calibration_commit());
+    bool bypassed;
+    TEST_ESP_OK(measure_svc_calibration_protection_begin(&bypassed));
+    measure_svc_calibration_protection_end();
+    TEST_ASSERT_FALSE(bypassed);
+    uint32_t offset;
+    TEST_ESP_OK(measure_svc_get_relative_u4(MEASURE_CHANNEL_0, MEASURE_KIND_VOLTAGE, &offset));
+    TEST_ASSERT_EQUAL_UINT32(0U, offset);
     TEST_ASSERT_EQUAL_UINT32(22000U, measure_svc_calibration_apply_target_u4(
         MEASURE_KIND_VOLTAGE, MEASURE_CHANNEL_0, high_code_2200, 2048U));
     TEST_ASSERT_EQUAL_UINT32(
@@ -263,6 +270,12 @@ TEST_CASE("calibration invalid commit and persistence failure keep transaction o
     const uint32_t active_before = measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U);
     TEST_ESP_OK(nvs_flash_deinit());
     TEST_ASSERT_NOT_EQUAL(ESP_OK, measure_svc_calibration_commit());
+    bool bypassed;
+    TEST_ESP_OK(measure_svc_calibration_protection_begin(&bypassed));
+    measure_svc_calibration_protection_end();
+    TEST_ASSERT_TRUE(bypassed);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE,
+        measure_svc_set_relative_u4(MEASURE_CHANNEL_1, MEASURE_KIND_CURRENT, 1U));
     TEST_ASSERT_EQUAL_UINT32(active_before, measure_svc_calibration_apply_target_u4(MEASURE_KIND_CURRENT, MEASURE_CHANNEL_1, 200U, 2048U));
     TEST_ESP_OK(nvs_flash_init());
 

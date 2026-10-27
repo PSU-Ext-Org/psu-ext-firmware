@@ -178,7 +178,9 @@ static void scpi_handler_handle_measure_query(
         return;
     }
 
-    err = measure_svc_read(channel, kind, &value_u4);
+    err = kind == MEASURE_KIND_POWER ?
+        measure_svc_read(channel, kind, &value_u4) :
+        measure_svc_read_relative(channel, kind, &value_u4);
     if (err != ESP_OK) {
         scpi_handler_write_esp_error(
             write_response,
