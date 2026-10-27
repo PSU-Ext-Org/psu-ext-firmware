@@ -15,6 +15,6 @@
 idf_component_register(
     SRC_DIRS "."
     INCLUDE_DIRS "."
-    PRIV_INCLUDE_DIRS "../../../test/support"
+    PRIV_INCLUDE_DIRS ".." "../../../test/support"
     REQUIRES unity scpi_handler measure_svc nvs_flash output_ctrl protection_svc freertos mqtt_svc wifi_manager esp_event tcp_server
 )

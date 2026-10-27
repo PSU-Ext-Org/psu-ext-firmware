@@ -94,7 +94,7 @@ capacity leave the registry unchanged. Do not register the same table twice;
 module initialization should cache its result. There is no unregister operation.
 
 Keywords are uppercase exact spellings, with `?` included for queries. Register
-short and long aliases as separate entries. Incoming keywords are matched without
+short and long aliases as separate entries, or use compact patterns below. Incoming keywords are matched without
 case sensitivity, and argument case is preserved. Existing built-in commands take
 priority; extensions cannot override them. Use a module-specific namespace such
 as `I2C1:<module>:` to avoid conflicts.
@@ -120,3 +120,42 @@ code and tests are omitted when disabled. With the sensor enabled, every device
 on this bus uses 100 kHz; OLED-only configurations retain 400 kHz.
 See [MLX90614 details](mlx90614/README.md) for protocol, library provenance,
 resource ownership, and validation instructions.
+
+### Compact aliases
+
+Use `scpi_handler_register_patterns()` with the same table type to register each
+callback once. For example:
+
+```c
+static const scpi_handler_command_t commands[] = {
+    {"EXT:(MEAS|MEASURE):(TEMP|TEMPERATURE)?", query_temperature, &state},
+};
+return scpi_handler_register_patterns(
+    commands, sizeof(commands) / sizeof(commands[0]));
+```
+
+`[text]` is optional; `(A|B)` chooses explicit alternatives. Groups can nest four
+levels. All other characters are literal uppercase command text. A query `?`
+must end every expanded keyword that contains it. The matcher consumes the
+whole keyword and never infers intermediate abbreviations. Thus
+`[[:](SOURCE|SOUR):]OCP:(PROTECT:STATE|PROT:STAT)?` preserves coupled long/short
+forms without accepting `SOURCE:OCP:PROTECT:STAT?`.
+
+Patterns are at most 127 bytes and represent at most 256 nonempty spellings.
+Empty branches are invalid. The pattern strings stay in immutable storage;
+expanded aliases are never retained in flash or RAM. Literal and pattern
+registrations share the 32-descriptor registry. Overlapping entries in one table
+return `ESP_ERR_INVALID_ARG`; overlaps with already registered extensions return
+`ESP_ERR_INVALID_STATE`, including overlaps across the two APIs. Built-ins keep
+priority. Callbacks and context have the same lifetime and concurrency contract
+as literal registrations.
+
+Host compatibility checks compile the production matcher and registry, then
+compare against the original alias fixture (no board or NVS access):
+
+```powershell
+python tools/test_scpi_patterns.py --compiler '<path-to-host-cl.exe-or-clang.exe>'
+```
+
+On POSIX hosts, omit `--compiler` to use `cc`. Target tests use `[pattern]` and
+`[registry]` in the isolated unit-test application.

@@ -166,10 +166,8 @@ static void command_meas_power_aver_coun_query(
 }
 
 static const scpi_handler_command_entry_t s_measure_config_commands[] = {
-    {"MEAS:ADC:RATE", command_meas_adc_rate},
-    {"MEASURE:ADC:RATE", command_meas_adc_rate},
-    {"MEAS:ADC:RATE?", command_meas_adc_rate_query},
-    {"MEASURE:ADC:RATE?", command_meas_adc_rate_query},
+    {"(MEAS|MEASURE):ADC:RATE", command_meas_adc_rate},
+    {"(MEAS|MEASURE):ADC:RATE?", command_meas_adc_rate_query},
     {"MEAS:VOLT:AVER:COUN", command_meas_volt_aver_coun},
     {"MEAS:VOLT:AVER:COUN?", command_meas_volt_aver_coun_query},
     {"MEAS:CURR:AVER:COUN", command_meas_curr_aver_coun},

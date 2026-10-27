@@ -150,22 +150,10 @@ static void command_idn_query(scpi_handler_parsed_command_t *parsed,
 
 static const scpi_handler_command_entry_t s_system_commands[] = {
     {"*IDN?", command_idn_query},
-    {"SYST:ERR?", command_syst_err_query},
-    {"SYSTEM:ERROR?", command_syst_err_query},
-    {":SYST:ERR?", command_syst_err_query},
-    {":SYSTEM:ERROR?", command_syst_err_query},
-    {"SYST:DATETIME", command_syst_datetime},
-    {"SYSTEM:DATETIME", command_syst_datetime},
-    {":SYST:DATETIME", command_syst_datetime},
-    {":SYSTEM:DATETIME", command_syst_datetime},
-    {"SYST:DATETIME?", command_syst_datetime_query},
-    {"SYSTEM:DATETIME?", command_syst_datetime_query},
-    {":SYST:DATETIME?", command_syst_datetime_query},
-    {":SYSTEM:DATETIME?", command_syst_datetime_query},
-    {"SYST:DATETIME:MAP?", command_syst_datetime_map_query},
-    {"SYSTEM:DATETIME:MAP?", command_syst_datetime_map_query},
-    {":SYST:DATETIME:MAP?", command_syst_datetime_map_query},
-    {":SYSTEM:DATETIME:MAP?", command_syst_datetime_map_query},
+    {"[:](SYST:ERR|SYSTEM:ERROR)?", command_syst_err_query},
+    {"[:](SYST|SYSTEM):DATETIME", command_syst_datetime},
+    {"[:](SYST|SYSTEM):DATETIME?", command_syst_datetime_query},
+    {"[:](SYST|SYSTEM):DATETIME:MAP?", command_syst_datetime_map_query},
 };
 
 const scpi_handler_command_module_t scpi_handler_system_module = {

@@ -20,6 +20,7 @@
  */
 
 #include "scpi_handler_commands.h"
+#include "scpi_handler_pattern.h"
 
 #include <string.h>
 
@@ -96,7 +97,7 @@ void scpi_handler_handle_command(
     for (size_t module = 0; module < sizeof(s_modules) / sizeof(s_modules[0]); ++module) {
         for (size_t entry = 0; entry < s_modules[module]->count; ++entry) {
             const scpi_handler_command_entry_t *command = &s_modules[module]->commands[entry];
-            if (strcmp(keyword_upper, command->keyword) == 0) {
+            if (scpi_handler_pattern_match(command->pattern, keyword_upper)) {
                 command->callback(&parsed, writer);
                 return;
             }

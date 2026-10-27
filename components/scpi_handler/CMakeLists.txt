@@ -19,6 +19,7 @@ idf_component_register(
         "scpi_handler_measure_config.c"
         "scpi_handler_data.c"
         "scpi_handler_registry.c"
+        "scpi_handler_pattern.c"
         "scpi_handler_calibration.c"
         "scpi_handler_common.c"
         "scpi_handler_arguments.c"

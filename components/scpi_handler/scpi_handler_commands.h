@@ -15,6 +15,9 @@
  */
 
 #pragma once
+
+#include <stdbool.h>
+
 #include "scpi_handler.h"
 #include "scpi_handler_protocol.h"
 
@@ -22,7 +25,7 @@ typedef void (*scpi_handler_command_callback_t)(
     scpi_handler_parsed_command_t *parsed,
     const scpi_handler_response_writer_t *writer);
 typedef struct {
-    const char *keyword;
+    const char *pattern;
     scpi_handler_command_callback_t callback;
 } scpi_handler_command_entry_t;
 typedef struct {
