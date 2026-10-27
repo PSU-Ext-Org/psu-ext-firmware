@@ -21,6 +21,8 @@
 
 #include "measure_svc_calibration.h"
 #include "measure_svc.h"
+#include "measure_svc_coordination.h"
+#include "measure_svc_relative.h"
 #include "measure_svc_calibration_capture.h"
 #include "measure_svc_calibration_persistence.h"
 #include "measure_svc_calibration_runtime.h"
@@ -41,7 +43,6 @@ typedef struct {
     measure_kind_t kind;
     measure_channel_t channel;
     measure_svc_cal_table_t *active_table;
-    uint32_t *relative_u4;
 } cal_target_t;
 
 static const char *TAG = "measure_cal";
@@ -56,26 +57,22 @@ static measure_svc_cal_transaction_state_t s_transaction_state;
 static const cal_target_t *s_transaction_target;
 static measure_svc_cal_table_t s_staging_table;
 static uint32_t s_transaction_generation;
-static uint32_t s_relative_u4[3];
 
 static const cal_target_t s_targets[] = {
     {
         .kind = MEASURE_KIND_VOLTAGE,
         .channel = MEASURE_CHANNEL_0,
         .active_table = &s_voltage_ch0_table,
-        .relative_u4 = &s_relative_u4[0],
     },
     {
         .kind = MEASURE_KIND_VOLTAGE,
         .channel = MEASURE_CHANNEL_1,
         .active_table = &s_voltage_ch1_table,
-        .relative_u4 = &s_relative_u4[1],
     },
     {
         .kind = MEASURE_KIND_CURRENT,
         .channel = MEASURE_CHANNEL_1,
         .active_table = &s_current_ch1_table,
-        .relative_u4 = &s_relative_u4[2],
     },
 };
 
@@ -124,7 +121,7 @@ esp_err_t measure_svc_calibration_start(measure_kind_t kind, measure_channel_t c
         return ESP_ERR_INVALID_STATE;
     }
 
-    memset(s_relative_u4, 0, sizeof(s_relative_u4));
+    measure_svc_relative_clear_locked();
     memset(&s_staging_table, 0, sizeof(s_staging_table));
     s_transaction_target = target;
     s_transaction_state = MEASURE_SVC_CAL_TRANSACTION_OPEN;
@@ -440,7 +437,7 @@ esp_err_t measure_svc_calibration_init(void)
 /* The calibration mutex serializes REL changes and complete protection actions
  * against transaction transitions. Lock order: calibration, then protection.
  * Guarded protection code must not call back into calibration APIs. */
-esp_err_t measure_svc_calibration_protection_begin(bool *bypassed)
+esp_err_t measure_svc_coordination_begin(bool *bypassed)
 {
     if (bypassed == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -453,53 +450,17 @@ esp_err_t measure_svc_calibration_protection_begin(bool *bypassed)
     return ESP_OK;
 }
 
+void measure_svc_coordination_end(void)
+{
+    xSemaphoreGive(s_calibration_lock);
+}
+
+esp_err_t measure_svc_calibration_protection_begin(bool *bypassed)
+{
+    return measure_svc_coordination_begin(bypassed);
+}
+
 void measure_svc_calibration_protection_end(void)
 {
-    xSemaphoreGive(s_calibration_lock);
-}
-
-esp_err_t measure_svc_set_relative_u4(
-    measure_channel_t channel, measure_kind_t kind, uint32_t offset_u4)
-{
-    const cal_target_t *target = find_target(kind, channel);
-    if (target == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    ESP_RETURN_ON_ERROR(take_calibration_lock(), TAG, "taking calibration lock failed");
-    if ((offset_u4 != 0U) && (s_transaction_state != MEASURE_SVC_CAL_TRANSACTION_IDLE)) {
-        xSemaphoreGive(s_calibration_lock);
-        return ESP_ERR_INVALID_STATE;
-    }
-    *target->relative_u4 = offset_u4;
-    xSemaphoreGive(s_calibration_lock);
-    return ESP_OK;
-}
-
-esp_err_t measure_svc_get_relative_u4(
-    measure_channel_t channel, measure_kind_t kind, uint32_t *offset_u4)
-{
-    const cal_target_t *target = find_target(kind, channel);
-    if ((target == NULL) || (offset_u4 == NULL)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    ESP_RETURN_ON_ERROR(take_calibration_lock(), TAG, "taking calibration lock failed");
-    *offset_u4 = *target->relative_u4;
-    xSemaphoreGive(s_calibration_lock);
-    return ESP_OK;
-}
-
-esp_err_t measure_svc_read_relative(
-    measure_channel_t channel, measure_kind_t kind, uint32_t *value_u4)
-{
-    const cal_target_t *target = find_target(kind, channel);
-    if ((target == NULL) || (value_u4 == NULL)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    ESP_RETURN_ON_ERROR(take_calibration_lock(), TAG, "taking calibration lock failed");
-    esp_err_t err = measure_svc_read(channel, kind, value_u4);
-    if (err == ESP_OK) {
-        *value_u4 = *value_u4 > *target->relative_u4 ? *value_u4 - *target->relative_u4 : 0U;
-    }
-    xSemaphoreGive(s_calibration_lock);
-    return err;
+    measure_svc_coordination_end();
 }

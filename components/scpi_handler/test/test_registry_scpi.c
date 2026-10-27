@@ -122,3 +122,26 @@ TEST_CASE("SCPI extension tables register atomically and dispatch through transp
     TEST_ASSERT_EQUAL_STRING("ERR,\"Command keyword too long\"", s_response);
 
 }
+
+TEST_CASE("built-in aliases retain their exact accepted spelling", "[scpi][registry]")
+{
+    const char *valid[] = {":CALIBRATION:VOLT:COUNT?", "CAL:VOLTAGE:COUN?",
+        ":SOUR:OVP", "SOURCE:OCP:STAT", "SOUR:RESET:PROT", ":SOURCE:OVP",
+        ":TIMER:CLE", "TIM:ADD", ":SYSTEM:DATETIME", "MEASURE:ADC:RATE",
+        ":SYSTEM:MQTT:ENABLE", "SYST:MQTT:ENAB", "MEAS:VOLT:REL"};
+    for (unsigned i = 0; i < sizeof(valid) / sizeof(valid[0]); ++i) {
+        run_command(valid[i]);
+        TEST_ASSERT_EQUAL_MEMORY("ERR,", s_response, 4);
+        TEST_ASSERT_NULL(strstr(s_response, "Unknown command"));
+    }
+    const char *invalid[] = {":OUTP", "MEASURE:VOLT?", "CALIB:TRAN?", "SYST:ERROR?",
+        "CAL:VOLT:COUNT", "MEAS:VOLT:REL??", "SOURCE:OVP:PROTECT:STAT?"};
+    for (unsigned i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+        run_command(invalid[i]);
+        TEST_ASSERT_NOT_NULL(strstr(s_response, "Unknown command"));
+    }
+    run_command("WIFI:SSID");
+    TEST_ASSERT_EQUAL_STRING("ERR,\"Missing SSID\"", s_response);
+    run_command("WIFI:PASS");
+    TEST_ASSERT_EQUAL_STRING("ERR,\"Missing password\"", s_response);
+}

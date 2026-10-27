@@ -19,7 +19,9 @@
  * @brief SCPI output relay command handlers.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -28,118 +30,69 @@
 #include "output_ctrl.h"
 #include "protection_svc.h"
 
-static bool scpi_handler_parse_output_state(const char *argument, bool *enabled)
+static bool scpi_handler_parse_output_set_args(char *argument, uint8_t *channel, bool *enabled)
 {
-    if ((argument == NULL) || (enabled == NULL)) {
-        return false;
-    }
-
-    if (strcmp(argument, "0") == 0) {
-        *enabled = false;
-        return true;
-    }
-
-    if (strcmp(argument, "1") == 0) {
-        *enabled = true;
-        return true;
-    }
-
-    return false;
-}
-
-static bool scpi_handler_parse_output_set_args(
-    char *argument,
-    uint8_t *channel,
-    bool *enabled)
-{
-    char *state_arg;
+    scpi_handler_args_t args = scpi_handler_args(argument, false);
     measure_channel_t parsed_channel;
-
-    if ((argument == NULL) || (channel == NULL) || (enabled == NULL)) {
+    if (!scpi_handler_arg_channel(&args, &parsed_channel) ||
+        !scpi_handler_arg_bool(&args, false, enabled) || !scpi_handler_args_end(&args)) {
         return false;
     }
-
-    state_arg = strchr(argument, ',');
-    if (state_arg == NULL) {
-        return false;
-    }
-
-    *state_arg++ = '\0';
-    scpi_handler_trim(argument);
-    scpi_handler_trim(state_arg);
-
-    if (!scpi_handler_parse_measure_channel(argument, &parsed_channel)) {
-        return false;
-    }
-
-    if (!scpi_handler_parse_output_state(state_arg, enabled)) {
-        return false;
-    }
-
     *channel = (uint8_t)parsed_channel;
     return true;
 }
 
-static void scpi_handler_handle_output_set(
+static void command_outp(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     uint8_t channel;
     bool enabled;
     esp_err_t err;
 
     if (!scpi_handler_parse_output_set_args(parsed->argument, &channel, &enabled)) {
-        write_response("ERR,\"Expected OUTP <channel>,<0|1>\"");
+        writer->write_text("ERR,\"Expected OUTP <channel>,<0|1>\"");
         return;
     }
 
     if (channel != PROTECTION_SVC_CHANNEL_CH1) {
-        write_response("ERR,\"Expected channel 1 or CH1\"");
+        writer->write_text("ERR,\"Expected channel 1 or CH1\"");
         return;
     }
 
     err = protection_svc_set_ch1_output(enabled, OUTPUT_CTRL_CHANGE_CAUSE_SCPI);
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "OUTP", err);
+        scpi_handler_write_esp_error(writer->write_text, "OUTP", err);
     }
 }
 
-static void scpi_handler_handle_output_query(
-    const scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+static void command_outp_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
 {
     measure_channel_t parsed_channel;
     bool enabled;
     esp_err_t err;
 
     if (!scpi_handler_parse_measure_channel(parsed->argument, &parsed_channel)) {
-        write_response("ERR,\"Expected channel 1 or CH1\"");
+        writer->write_text("ERR,\"Expected channel 1 or CH1\"");
         return;
     }
 
     err = output_ctrl_get((uint8_t)parsed_channel, &enabled);
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "OUTP?", err);
+        scpi_handler_write_esp_error(writer->write_text, "OUTP?", err);
         return;
     }
 
-    write_response(enabled ? "1" : "0");
+    scpi_handler_respond_bool(writer->write_text, enabled);
 }
 
-bool scpi_handler_handle_output_command(
-    const char *keyword,
-    scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
-{
-    if (strcmp(keyword, "OUTP") == 0) {
-        scpi_handler_handle_output_set(parsed, write_response);
-        return true;
-    }
+static const scpi_handler_command_entry_t s_output_commands[] = {
+    {"OUTP", command_outp},
+    {"OUTP?", command_outp_query},
+};
 
-    if (strcmp(keyword, "OUTP?") == 0) {
-        scpi_handler_handle_output_query(parsed, write_response);
-        return true;
-    }
-
-    return false;
-}
+const scpi_handler_command_module_t scpi_handler_output_module = {
+    s_output_commands, sizeof(s_output_commands) / sizeof(s_output_commands[0]),
+};

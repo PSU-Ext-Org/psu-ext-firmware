@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_commands.h"
 
 #include <stdbool.h>
 #include <string.h>

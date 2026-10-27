@@ -19,7 +19,9 @@
  * @brief SCPI WiFi configuration and status command handlers.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -28,86 +30,107 @@
 
 #include "wifi_manager.h"
 
-bool scpi_handler_handle_wifi_command(
-    const char *keyword,
-    const scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+static void command_wifi_ssid(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
 {
-    if (strcmp(keyword, "WIFI:SSID") == 0) {
-        esp_err_t err;
+    esp_err_t err;
 
-        if (parsed->argument == NULL) {
-            write_response("ERR,\"Missing SSID\"");
-            return true;
-        }
-
-        err = wifi_manager_set_ssid(parsed->argument);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "WIFI:SSID", err);
-        }
-        return true;
+    if (parsed->argument == NULL) {
+        writer->write_text("ERR,\"Missing SSID\"");
+        return;
     }
 
-    if (strcmp(keyword, "WIFI:SSID?") == 0) {
-        wifi_manager_state_t state;
-        esp_err_t err = wifi_manager_get_state(&state);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "WIFI:SSID?", err);
-            return true;
-        }
-
-        write_response(state.ssid[0] != '\0' ? state.ssid : "EMPTY");
-        return true;
+    err = wifi_manager_set_ssid(parsed->argument);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "WIFI:SSID", err);
     }
-
-    if (strcmp(keyword, "WIFI:PASS") == 0) {
-        esp_err_t err;
-
-        if (parsed->argument == NULL) {
-            write_response("ERR,\"Missing password\"");
-            return true;
-        }
-
-        err = wifi_manager_set_password(parsed->argument);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "WIFI:PASS", err);
-        }
-        return true;
-    }
-
-    if (strcmp(keyword, "WIFI:PASS?") == 0) {
-        write_response(wifi_manager_password_is_set() ? "SET" : "EMPTY");
-        return true;
-    }
-
-    if (strcmp(keyword, "WIFI:CLEAR") == 0) {
-        esp_err_t err = wifi_manager_clear_credentials();
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "WIFI:CLEAR", err);
-        }
-        return true;
-    }
-
-    if (strcmp(keyword, "WIFI:STATUS?") == 0) {
-        wifi_manager_state_t state;
-        char response[160];
-        esp_err_t err = wifi_manager_get_state(&state);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "WIFI:STATUS?", err);
-            return true;
-        }
-
-        snprintf(
-            response,
-            sizeof(response),
-            "\"%s\",%d,%" PRIu32 ",\"%s\"",
-            state.ssid,
-            state.is_connected ? 1 : 0,
-            state.conn_time_seconds,
-            state.ip);
-        write_response(response);
-        return true;
-    }
-
-    return false;
 }
+
+static void command_wifi_ssid_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    wifi_manager_state_t state;
+    esp_err_t err = wifi_manager_get_state(&state);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "WIFI:SSID?", err);
+        return;
+    }
+
+    writer->write_text(state.ssid[0] != '\0' ? state.ssid : "EMPTY");
+}
+
+static void command_wifi_pass(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    esp_err_t err;
+
+    if (parsed->argument == NULL) {
+        writer->write_text("ERR,\"Missing password\"");
+        return;
+    }
+
+    err = wifi_manager_set_password(parsed->argument);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "WIFI:PASS", err);
+    }
+}
+
+static void command_wifi_pass_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    writer->write_text(wifi_manager_password_is_set() ? "SET" : "EMPTY");
+}
+
+static void command_wifi_clear(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    esp_err_t err = wifi_manager_clear_credentials();
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "WIFI:CLEAR", err);
+    }
+}
+
+static void command_wifi_status_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    wifi_manager_state_t state;
+    char response[160];
+    esp_err_t err = wifi_manager_get_state(&state);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "WIFI:STATUS?", err);
+        return;
+    }
+
+    snprintf(
+        response,
+        sizeof(response),
+        "\"%s\",%d,%" PRIu32 ",\"%s\"",
+        state.ssid,
+        state.is_connected ? 1 : 0,
+        state.conn_time_seconds,
+        state.ip);
+    writer->write_text(response);
+}
+
+static const scpi_handler_command_entry_t s_wifi_commands[] = {
+    {"WIFI:SSID", command_wifi_ssid},
+    {"WIFI:SSID?", command_wifi_ssid_query},
+    {"WIFI:PASS", command_wifi_pass},
+    {"WIFI:PASS?", command_wifi_pass_query},
+    {"WIFI:CLEAR", command_wifi_clear},
+    {"WIFI:STATUS?", command_wifi_status_query},
+};
+
+const scpi_handler_command_module_t scpi_handler_wifi_module = {
+    s_wifi_commands, sizeof(s_wifi_commands) / sizeof(s_wifi_commands[0]),
+};

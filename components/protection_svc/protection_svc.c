@@ -26,7 +26,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "measure_svc_samples.h"
-#include "measure_svc_calibration.h"
+#include "measure_svc_coordination.h"
 #include "nvs.h"
 #include "output_ctrl.h"
 
@@ -290,10 +290,10 @@ static esp_err_t check_ch1_enable_absolute(void)
 esp_err_t protection_svc_check_ch1_enable_allowed(void)
 {
     bool bypassed;
-    ESP_RETURN_ON_ERROR(measure_svc_calibration_protection_begin(&bypassed), TAG,
+    ESP_RETURN_ON_ERROR(measure_svc_coordination_begin(&bypassed), TAG,
         "taking calibration guard failed");
     const esp_err_t err = bypassed ? ESP_OK : check_ch1_enable_absolute();
-    measure_svc_calibration_protection_end();
+    measure_svc_coordination_end();
     return err;
 }
 
@@ -369,13 +369,13 @@ static void protection_svc_check_sample(
     measure_channel_t channel, measure_kind_t kind, uint32_t value_u4)
 {
     bool bypassed;
-    if (measure_svc_calibration_protection_begin(&bypassed) != ESP_OK) {
+    if (measure_svc_coordination_begin(&bypassed) != ESP_OK) {
         return;
     }
     if (!bypassed) {
         check_sample_absolute(channel, kind, value_u4);
     }
-    measure_svc_calibration_protection_end();
+    measure_svc_coordination_end();
 }
 
 static void protection_svc_sample_listener(

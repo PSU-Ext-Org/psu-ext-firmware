@@ -15,7 +15,9 @@
  */
 
 /** @file scpi_handler_relative.c @brief Relative voltage/current SCPI commands. */
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -34,20 +36,10 @@ static void scpi_handler_handle_relative(
         write_response("ERR,\"Expected REL channel[,offset]\"");
         return;
     }
-    scpi_handler_trim(argument);
-    size_t length = strlen(argument);
-    if ((length > 0U) && (argument[length - 1U] == ';')) {
-        argument[length - 1U] = '\0';
-        scpi_handler_trim(argument);
-    }
-    char *value = strchr(argument, ',');
-    if (!query && (value != NULL)) {
-        *value++ = '\0';
-        scpi_handler_trim(argument);
-        scpi_handler_trim(value);
-    }
-    if (!scpi_handler_parse_measure_channel(argument, &channel) ||
-        (!query && ((value == NULL) || !scpi_handler_parse_value_u4(value, &offset_u4)))) {
+    scpi_handler_args_t args = scpi_handler_args(argument, true);
+    if (!scpi_handler_arg_channel(&args, &channel) ||
+        (!query && !scpi_handler_arg_value(&args, &offset_u4)) ||
+        !scpi_handler_args_end(&args)) {
         write_response("ERR,\"Expected REL channel[,nonnegative offset]\"");
         return;
     }
@@ -56,26 +48,45 @@ static void scpi_handler_handle_relative(
     if (err != ESP_OK) {
         scpi_handler_write_esp_error(write_response, parsed->keyword, err);
     } else if (query) {
-        char response[24];
-        scpi_handler_format_value_u4(offset_u4, response, sizeof(response));
-        write_response(response);
+        scpi_handler_respond_value(write_response, offset_u4);
     }
 }
 
-bool scpi_handler_handle_relative_command(
-    const char *keyword,
+static void command_meas_volt_rel(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
-    if ((strcmp(keyword, "MEAS:VOLT:REL") == 0) ||
-        (strcmp(keyword, "MEAS:VOLT:REL?") == 0) ||
-        (strcmp(keyword, "MEAS:CURR:REL") == 0) ||
-        (strcmp(keyword, "MEAS:CURR:REL?") == 0)) {
-        scpi_handler_handle_relative(parsed,
-            strstr(keyword, ":VOLT:") != NULL ? MEASURE_KIND_VOLTAGE : MEASURE_KIND_CURRENT,
-            keyword[strlen(keyword) - 1U] == '?', write_response);
-        return true;
-    }
-
-    return false;
+    scpi_handler_handle_relative(parsed, MEASURE_KIND_VOLTAGE, false, writer->write_text);
 }
+
+static void command_meas_volt_rel_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_handle_relative(parsed, MEASURE_KIND_VOLTAGE, true, writer->write_text);
+}
+
+static void command_meas_curr_rel(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_handle_relative(parsed, MEASURE_KIND_CURRENT, false, writer->write_text);
+}
+
+static void command_meas_curr_rel_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_handle_relative(parsed, MEASURE_KIND_CURRENT, true, writer->write_text);
+}
+
+static const scpi_handler_command_entry_t s_relative_commands[] = {
+    {"MEAS:VOLT:REL", command_meas_volt_rel},
+    {"MEAS:VOLT:REL?", command_meas_volt_rel_query},
+    {"MEAS:CURR:REL", command_meas_curr_rel},
+    {"MEAS:CURR:REL?", command_meas_curr_rel_query},
+};
+
+const scpi_handler_command_module_t scpi_handler_relative_module = {
+    s_relative_commands, sizeof(s_relative_commands) / sizeof(s_relative_commands[0]),
+};

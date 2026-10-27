@@ -19,7 +19,9 @@
  * @brief SCPI timer queue command handlers.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -28,42 +30,6 @@
 #include <string.h>
 
 #include "timer_svc.h"
-
-static bool scpi_handler_timer_keyword_matches(const char *keyword, const char *short_form, const char *long_form)
-{
-    if ((strcmp(keyword, short_form) == 0) || (strcmp(keyword, long_form) == 0)) {
-        return true;
-    }
-
-    if ((keyword[0] == ':') && (strcmp(keyword + 1, short_form) == 0)) {
-        return true;
-    }
-
-    if ((keyword[0] == ':') && (strcmp(keyword + 1, long_form) == 0)) {
-        return true;
-    }
-
-    return false;
-}
-
-static bool scpi_handler_parse_timer_state(const char *argument, bool *enabled)
-{
-    if ((argument == NULL) || (enabled == NULL)) {
-        return false;
-    }
-
-    if (strcmp(argument, "0") == 0) {
-        *enabled = false;
-        return true;
-    }
-
-    if (strcmp(argument, "1") == 0) {
-        *enabled = true;
-        return true;
-    }
-
-    return false;
-}
 
 static bool scpi_handler_parse_timer_channel(const char *argument, uint8_t *channel)
 {
@@ -88,45 +54,18 @@ static bool scpi_handler_parse_timer_add_args(
     uint32_t *duration_ms,
     bool *enabled)
 {
+    scpi_handler_args_t args = scpi_handler_args(argument, false);
+    measure_channel_t parsed_channel;
     char *id_arg;
     char *duration_arg;
-    char *state_arg;
-
-    if ((argument == NULL) || (channel == NULL) || (id == NULL) || (duration_ms == NULL) || (enabled == NULL)) {
-        return false;
-    }
-
-    id_arg = strchr(argument, ',');
-    if (id_arg == NULL) {
-        return false;
-    }
-    *id_arg++ = '\0';
-
-    duration_arg = strchr(id_arg, ',');
-    if (duration_arg == NULL) {
-        return false;
-    }
-    *duration_arg++ = '\0';
-
-    state_arg = strchr(duration_arg, ',');
-    if (state_arg == NULL) {
-        return false;
-    }
-    *state_arg++ = '\0';
-
-    scpi_handler_trim(argument);
-    scpi_handler_trim(id_arg);
-    scpi_handler_trim(duration_arg);
-    scpi_handler_trim(state_arg);
-
-    if ((strchr(state_arg, ',') != NULL) ||
-        !scpi_handler_parse_timer_channel(argument, channel) ||
-        (strlen(id_arg) != 3U) ||
+    if (!scpi_handler_arg_channel(&args, &parsed_channel) ||
+        !scpi_handler_arg_string(&args, &id_arg) || strlen(id_arg) != 3U ||
+        !scpi_handler_arg_string(&args, &duration_arg) ||
         !scpi_handler_parse_seconds_to_ms(duration_arg, duration_ms) ||
-        !scpi_handler_parse_timer_state(state_arg, enabled)) {
+        !scpi_handler_arg_bool(&args, false, enabled) || !scpi_handler_args_end(&args)) {
         return false;
     }
-
+    *channel = (uint8_t)parsed_channel;
     memcpy(id, id_arg, 3U);
     id[3] = '\0';
     return true;
@@ -149,9 +88,9 @@ static void scpi_handler_timer_write_status(
     write_response(response);
 }
 
-static void scpi_handler_handle_timer_add(
+static void command_tim_add(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     uint8_t channel;
     char id[4];
@@ -160,41 +99,41 @@ static void scpi_handler_handle_timer_add(
     esp_err_t err;
 
     if (!scpi_handler_parse_timer_add_args(parsed->argument, &channel, id, &duration_ms, &enabled)) {
-        write_response("ERR,\"Expected TIMer:ADD CH1,<id>,<seconds>,<0|1>\"");
+        writer->write_text("ERR,\"Expected TIMer:ADD CH1,<id>,<seconds>,<0|1>\"");
         return;
     }
 
     err = timer_svc_add_step(channel, id, duration_ms, enabled);
     if (err == ESP_ERR_NO_MEM) {
-        write_response("ERR,\"Timer queue full\"");
+        writer->write_text("ERR,\"Timer queue full\"");
         return;
     }
 
     if (err == ESP_ERR_INVALID_ARG) {
-        write_response("ERR,\"Expected unique 3-character timer id\"");
+        writer->write_text("ERR,\"Expected unique 3-character timer id\"");
         return;
     }
 
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "TIM:ADD", err);
+        scpi_handler_write_esp_error(writer->write_text, "TIM:ADD", err);
     }
 }
 
-static void scpi_handler_handle_timer_clear(
+static void command_tim_clear(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     uint8_t channel;
     esp_err_t err;
 
     if (!scpi_handler_parse_timer_channel(parsed->argument, &channel)) {
-        write_response("ERR,\"Expected channel 1 or CH1\"");
+        writer->write_text("ERR,\"Expected channel 1 or CH1\"");
         return;
     }
 
     err = timer_svc_clear(channel);
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "TIM:CLE", err);
+        scpi_handler_write_esp_error(writer->write_text, "TIM:CLE", err);
     }
 }
 
@@ -221,61 +160,81 @@ static void scpi_handler_handle_timer_toggle(
     }
 }
 
-static void scpi_handler_handle_timer_status(
+static void command_tim_status_query(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     uint8_t channel;
     timer_svc_status_t status;
     esp_err_t err;
 
     if (!scpi_handler_parse_timer_channel(parsed->argument, &channel)) {
-        write_response("ERR,\"Expected channel 1 or CH1\"");
+        writer->write_text("ERR,\"Expected channel 1 or CH1\"");
         return;
     }
 
     err = timer_svc_get_status(channel, &status);
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "TIM:STAT?", err);
+        scpi_handler_write_esp_error(writer->write_text, "TIM:STAT?", err);
         return;
     }
 
-    scpi_handler_timer_write_status(&status, write_response);
+    scpi_handler_timer_write_status(&status, writer->write_text);
 }
 
-bool scpi_handler_handle_timer_command(
-    const char *keyword,
+static void command_tim_start(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
-    if (scpi_handler_timer_keyword_matches(keyword, "TIM:ADD", "TIMER:ADD")) {
-        scpi_handler_handle_timer_add(parsed, write_response);
-        return true;
-    }
-
-    if (scpi_handler_timer_keyword_matches(keyword, "TIM:CLEAR", "TIMER:CLEAR") ||
-        scpi_handler_timer_keyword_matches(keyword, "TIM:CLE", "TIMER:CLE")) {
-        scpi_handler_handle_timer_clear(parsed, write_response);
-        return true;
-    }
-
-    if (scpi_handler_timer_keyword_matches(keyword, "TIM:START", "TIMER:START") ||
-        scpi_handler_timer_keyword_matches(keyword, "TIM:STAR", "TIMER:STAR")) {
-        scpi_handler_handle_timer_toggle(parsed, write_response);
-        return true;
-    }
-
-    if (scpi_handler_timer_keyword_matches(keyword, "TIM:PAUSE", "TIMER:PAUSE") ||
-        scpi_handler_timer_keyword_matches(keyword, "TIM:PAUS", "TIMER:PAUS")) {
-        scpi_handler_handle_timer_toggle(parsed, write_response);
-        return true;
-    }
-
-    if (scpi_handler_timer_keyword_matches(keyword, "TIM:STATUS?", "TIMER:STATUS?") ||
-        scpi_handler_timer_keyword_matches(keyword, "TIM:STAT?", "TIMER:STAT?")) {
-        scpi_handler_handle_timer_status(parsed, write_response);
-        return true;
-    }
-
-    return false;
+    scpi_handler_handle_timer_toggle(parsed, writer->write_text);
 }
+
+static void command_tim_pause(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_handle_timer_toggle(parsed, writer->write_text);
+}
+
+static const scpi_handler_command_entry_t s_timer_commands[] = {
+    {"TIM:ADD", command_tim_add},
+    {"TIMER:ADD", command_tim_add},
+    {":TIM:ADD", command_tim_add},
+    {":TIMER:ADD", command_tim_add},
+    {"TIM:CLEAR", command_tim_clear},
+    {"TIMER:CLEAR", command_tim_clear},
+    {":TIM:CLEAR", command_tim_clear},
+    {":TIMER:CLEAR", command_tim_clear},
+    {"TIM:CLE", command_tim_clear},
+    {"TIMER:CLE", command_tim_clear},
+    {":TIM:CLE", command_tim_clear},
+    {":TIMER:CLE", command_tim_clear},
+    {"TIM:START", command_tim_start},
+    {"TIMER:START", command_tim_start},
+    {":TIM:START", command_tim_start},
+    {":TIMER:START", command_tim_start},
+    {"TIM:STAR", command_tim_start},
+    {"TIMER:STAR", command_tim_start},
+    {":TIM:STAR", command_tim_start},
+    {":TIMER:STAR", command_tim_start},
+    {"TIM:PAUSE", command_tim_pause},
+    {"TIMER:PAUSE", command_tim_pause},
+    {":TIM:PAUSE", command_tim_pause},
+    {":TIMER:PAUSE", command_tim_pause},
+    {"TIM:PAUS", command_tim_pause},
+    {"TIMER:PAUS", command_tim_pause},
+    {":TIM:PAUS", command_tim_pause},
+    {":TIMER:PAUS", command_tim_pause},
+    {"TIM:STATUS?", command_tim_status_query},
+    {"TIMER:STATUS?", command_tim_status_query},
+    {":TIM:STATUS?", command_tim_status_query},
+    {":TIMER:STATUS?", command_tim_status_query},
+    {"TIM:STAT?", command_tim_status_query},
+    {"TIMER:STAT?", command_tim_status_query},
+    {":TIM:STAT?", command_tim_status_query},
+    {":TIMER:STAT?", command_tim_status_query},
+};
+
+const scpi_handler_command_module_t scpi_handler_timer_module = {
+    s_timer_commands, sizeof(s_timer_commands) / sizeof(s_timer_commands[0]),
+};

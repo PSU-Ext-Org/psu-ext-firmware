@@ -28,6 +28,7 @@
 #include "scpi_handler.h"
 
 #include "nvs_flash.h"
+#include "test_nvs.h"
 #include "unity.h"
 
 #include <stdio.h>
@@ -87,11 +88,7 @@ static void ensure_output_runtime(void)
         return;
     }
 
-    esp_err_t err = nvs_flash_init();
-    if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NVS_NEW_VERSION_FOUND)) {
-        TEST_ESP_OK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
+    esp_err_t err = test_nvs_init();
     TEST_ESP_OK(err);
 
     const measure_svc_config_t measure_config = {

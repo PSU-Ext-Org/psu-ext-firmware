@@ -29,6 +29,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "test_nvs.h"
 #include "unity.h"
 
 #define TEST_CAPTURE_SAMPLES 16U
@@ -58,12 +59,7 @@ BaseType_t __wrap_xQueueSemaphoreTake(QueueHandle_t queue, TickType_t ticks_to_w
 
 static void ensure_runtime_and_idle(void)
 {
-    esp_err_t nvs_err = nvs_flash_init();
-    if ((nvs_err == ESP_ERR_NVS_NO_FREE_PAGES) ||
-        (nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND)) {
-        TEST_ESP_OK(nvs_flash_erase());
-        nvs_err = nvs_flash_init();
-    }
+    esp_err_t nvs_err = test_nvs_init();
     TEST_ESP_OK(nvs_err);
 
     const measure_svc_config_t config = {

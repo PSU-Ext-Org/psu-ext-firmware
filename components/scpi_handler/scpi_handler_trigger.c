@@ -19,7 +19,9 @@
  * @brief SCPI trigger configuration command handlers.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -82,9 +84,9 @@ static bool scpi_handler_trigger_function_is_none(const char *function_name)
     return strcmp(function_upper, "NONE") == 0;
 }
 
-static void scpi_handler_handle_trigger_config(
+static void command_trig_conf(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     char *state_arg;
     char *function_arg;
@@ -94,20 +96,20 @@ static void scpi_handler_handle_trigger_config(
     esp_err_t err;
 
     if (parsed->argument == NULL) {
-        write_response("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>,<args...>\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>,<args...>\"");
         return;
     }
 
     state_arg = strchr(parsed->argument, ',');
     if (state_arg == NULL) {
-        write_response("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>,<args...>\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>,<args...>\"");
         return;
     }
     *state_arg++ = '\0';
 
     function_arg = strchr(state_arg, ',');
     if (function_arg == NULL) {
-        write_response("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>[,<args...>]\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF <trigger>,<HIGH|LOW>,<function>[,<args...>]\"");
         return;
     }
     *function_arg++ = '\0';
@@ -125,30 +127,30 @@ static void scpi_handler_handle_trigger_config(
     scpi_handler_trim(function_arg);
 
     if (!scpi_handler_parse_trigger_id(parsed->argument, &trigger_id)) {
-        write_response("ERR,\"Expected trigger 1 or 2\"");
+        writer->write_text("ERR,\"Expected trigger 1 or 2\"");
         return;
     }
 
     if (!scpi_handler_parse_trigger_state(state_arg, &state)) {
-        write_response("ERR,\"Expected trigger state HIGH or LOW\"");
+        writer->write_text("ERR,\"Expected trigger state HIGH or LOW\"");
         return;
     }
 
     if (function_arg[0] == '\0') {
-        write_response("ERR,\"Expected trigger function name\"");
+        writer->write_text("ERR,\"Expected trigger function name\"");
         return;
     }
 
     if (scpi_handler_trigger_function_is_none(function_arg)) {
         if ((arguments_arg != NULL) && (arguments_arg[0] != '\0')) {
-            write_response("ERR,\"NONE does not accept trigger arguments\"");
+            writer->write_text("ERR,\"NONE does not accept trigger arguments\"");
             return;
         }
 
         err = trigger_config_bind(trigger_id, state, "", "");
     } else {
         if ((arguments_arg == NULL) || (arguments_arg[0] == '\0')) {
-            write_response("ERR,\"Expected trigger arguments\""); 
+            writer->write_text("ERR,\"Expected trigger arguments\"");
             return;
         }
 
@@ -156,18 +158,18 @@ static void scpi_handler_handle_trigger_config(
     }
 
     if (err == ESP_ERR_INVALID_ARG) {
-        write_response("ERR,\"Invalid trigger function or arguments\"");
+        writer->write_text("ERR,\"Invalid trigger function or arguments\"");
         return;
     }
 
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "TRIG:CONF", err);
+        scpi_handler_write_esp_error(writer->write_text, "TRIG:CONF", err);
     }
 }
 
-static void scpi_handler_handle_trigger_config_query(
+static void command_trig_conf_query(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
     char *state_arg;
     uint8_t trigger_id;
@@ -180,13 +182,13 @@ static void scpi_handler_handle_trigger_config_query(
     esp_err_t err;
 
     if (parsed->argument == NULL) {
-        write_response("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
         return;
     }
 
     state_arg = strchr(parsed->argument, ',');
     if (state_arg == NULL) {
-        write_response("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
         return;
     }
     *state_arg++ = '\0';
@@ -195,49 +197,40 @@ static void scpi_handler_handle_trigger_config_query(
     scpi_handler_trim(state_arg);
 
     if ((parsed->argument[0] == '\0') || (state_arg[0] == '\0') || (strchr(state_arg, ',') != NULL)) {
-        write_response("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
+        writer->write_text("ERR,\"Expected TRIG:CONF? <trigger>,<HIGH|LOW>\"");
         return;
     }
 
     if (!scpi_handler_parse_trigger_id(parsed->argument, &trigger_id)) {
-        write_response("ERR,\"Expected trigger 1 or 2\"");
+        writer->write_text("ERR,\"Expected trigger 1 or 2\"");
         return;
     }
 
     if (!scpi_handler_parse_trigger_state(state_arg, &state)) {
-        write_response("ERR,\"Expected trigger state HIGH or LOW\"");
+        writer->write_text("ERR,\"Expected trigger state HIGH or LOW\"");
         return;
     }
 
     err = trigger_config_get(trigger_id, state, &mapping);
     if (err != ESP_OK) {
-        scpi_handler_write_esp_error(write_response, "TRIG:CONF?", err);
+        scpi_handler_write_esp_error(writer->write_text, "TRIG:CONF?", err);
         return;
     }
 
     if (mapping.function_name[0] == '\0') {
-        write_response("NONE");
+        writer->write_text("NONE");
         return;
     }
 
     snprintf(response, sizeof(response), "%s,%s", mapping.function_name, mapping.arguments);
-    write_response(response);
+    writer->write_text(response);
 }
 
-bool scpi_handler_handle_trigger_command(
-    const char *keyword,
-    scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
-{
-    if (strcmp(keyword, "TRIG:CONF?") == 0) {
-        scpi_handler_handle_trigger_config_query(parsed, write_response);
-        return true;
-    }
+static const scpi_handler_command_entry_t s_trigger_commands[] = {
+    {"TRIG:CONF?", command_trig_conf_query},
+    {"TRIG:CONF", command_trig_conf},
+};
 
-    if (strcmp(keyword, "TRIG:CONF") == 0) {
-        scpi_handler_handle_trigger_config(parsed, write_response);
-        return true;
-    }
-
-    return false;
-}
+const scpi_handler_command_module_t scpi_handler_trigger_module = {
+    s_trigger_commands, sizeof(s_trigger_commands) / sizeof(s_trigger_commands[0]),
+};

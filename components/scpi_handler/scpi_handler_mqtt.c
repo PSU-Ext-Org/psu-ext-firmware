@@ -19,7 +19,9 @@
  * @brief SCPI MQTT / Home Assistant configuration and status handlers.
  */
 
-#include "scpi_handler_internal.h"
+#include "scpi_handler_arguments.h"
+#include "scpi_handler_responses.h"
+#include "scpi_handler_commands.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -34,28 +36,6 @@ typedef enum {
     SCPI_HANDLER_MQTT_STRING_PASSWORD,
     SCPI_HANDLER_MQTT_STRING_PREFIX,
 } scpi_handler_mqtt_string_t;
-
-static const char *scpi_handler_mqtt_subcommand(const char *keyword)
-{
-    if (keyword[0] == ':') {
-        keyword++;
-    }
-
-    if (strncmp(keyword, "SYSTEM:MQTT:", 12) == 0) {
-        return keyword + 12;
-    }
-
-    if (strncmp(keyword, "SYST:MQTT:", 10) == 0) {
-        return keyword + 10;
-    }
-
-    return NULL;
-}
-
-static bool scpi_handler_mqtt_matches(const char *subcommand, const char *short_form, const char *long_form)
-{
-    return (strcmp(subcommand, short_form) == 0) || (strcmp(subcommand, long_form) == 0);
-}
 
 /**
  * @brief Strip one pair of surrounding double quotes in place.
@@ -205,64 +185,213 @@ static void scpi_handler_mqtt_query_status(scpi_handler_write_response_fn_t writ
     write_response(response);
 }
 
-bool scpi_handler_handle_mqtt_command(
-    const char *keyword,
+static void command_syst_mqtt_uri(
     scpi_handler_parsed_command_t *parsed,
-    scpi_handler_write_response_fn_t write_response)
+    const scpi_handler_response_writer_t *writer)
 {
-    const char *subcommand = scpi_handler_mqtt_subcommand(keyword);
-
-    if (subcommand == NULL) {
-        return false;
-    }
-
-    if (strcmp(subcommand, "URI") == 0) {
-        scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_URI, "SYST:MQTT:URI", parsed->argument, write_response);
-    } else if (strcmp(subcommand, "URI?") == 0) {
-        scpi_handler_mqtt_query_string(mqtt_svc_get_uri, "SYST:MQTT:URI?", write_response);
-    } else if (strcmp(subcommand, "USER") == 0) {
-        scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_USER, "SYST:MQTT:USER", parsed->argument, write_response);
-    } else if (strcmp(subcommand, "USER?") == 0) {
-        scpi_handler_mqtt_query_string(mqtt_svc_get_user, "SYST:MQTT:USER?", write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "PASS", "PASSWORD")) {
-        scpi_handler_mqtt_set_string(
-            SCPI_HANDLER_MQTT_STRING_PASSWORD,
-            "SYST:MQTT:PASS",
-            parsed->argument,
-            write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "PASS?", "PASSWORD?")) {
-        write_response(mqtt_svc_password_is_set() ? "SET" : "EMPTY");
-    } else if (scpi_handler_mqtt_matches(subcommand, "ENAB", "ENABLE")) {
-        scpi_handler_mqtt_set_enabled(parsed->argument, write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "ENAB?", "ENABLE?")) {
-        bool enabled = false;
-        const esp_err_t err = mqtt_svc_get_enabled(&enabled);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "SYST:MQTT:ENAB?", err);
-        } else {
-            write_response(enabled ? "1" : "0");
-        }
-    } else if (scpi_handler_mqtt_matches(subcommand, "INT", "INTERVAL")) {
-        scpi_handler_mqtt_set_interval(parsed->argument, write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "INT?", "INTERVAL?")) {
-        uint32_t interval_ms = 0U;
-        char response[16];
-        const esp_err_t err = mqtt_svc_get_interval_ms(&interval_ms);
-        if (err != ESP_OK) {
-            scpi_handler_write_esp_error(write_response, "SYST:MQTT:INT?", err);
-        } else {
-            snprintf(response, sizeof(response), "%" PRIu32, interval_ms);
-            write_response(response);
-        }
-    } else if (scpi_handler_mqtt_matches(subcommand, "PREF", "PREFIX")) {
-        scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_PREFIX, "SYST:MQTT:PREF", parsed->argument, write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "PREF?", "PREFIX?")) {
-        scpi_handler_mqtt_query_string(mqtt_svc_get_prefix, "SYST:MQTT:PREF?", write_response);
-    } else if (scpi_handler_mqtt_matches(subcommand, "STAT?", "STATUS?")) {
-        scpi_handler_mqtt_query_status(write_response);
-    } else {
-        return false;
-    }
-
-    return true;
+    scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_URI, "SYST:MQTT:URI", parsed->argument, writer->write_text);
 }
+
+static void command_syst_mqtt_uri_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    scpi_handler_mqtt_query_string(mqtt_svc_get_uri, "SYST:MQTT:URI?", writer->write_text);
+}
+
+static void command_syst_mqtt_user(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_USER, "SYST:MQTT:USER", parsed->argument, writer->write_text);
+}
+
+static void command_syst_mqtt_user_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    scpi_handler_mqtt_query_string(mqtt_svc_get_user, "SYST:MQTT:USER?", writer->write_text);
+}
+
+static void command_syst_mqtt_pass(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_mqtt_set_string(
+        SCPI_HANDLER_MQTT_STRING_PASSWORD,
+        "SYST:MQTT:PASS",
+        parsed->argument,
+        writer->write_text);
+}
+
+static void command_syst_mqtt_pass_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    writer->write_text(mqtt_svc_password_is_set() ? "SET" : "EMPTY");
+}
+
+static void command_syst_mqtt_enab(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_mqtt_set_enabled(parsed->argument, writer->write_text);
+}
+
+static void command_syst_mqtt_enab_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    bool enabled = false;
+    const esp_err_t err = mqtt_svc_get_enabled(&enabled);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "SYST:MQTT:ENAB?", err);
+    } else {
+        writer->write_text(enabled ? "1" : "0");
+    }
+}
+
+static void command_syst_mqtt_int(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_mqtt_set_interval(parsed->argument, writer->write_text);
+}
+
+static void command_syst_mqtt_int_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    uint32_t interval_ms = 0U;
+    char response[16];
+    const esp_err_t err = mqtt_svc_get_interval_ms(&interval_ms);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "SYST:MQTT:INT?", err);
+    } else {
+        snprintf(response, sizeof(response), "%" PRIu32, interval_ms);
+        writer->write_text(response);
+    }
+}
+
+static void command_syst_mqtt_pref(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    scpi_handler_mqtt_set_string(SCPI_HANDLER_MQTT_STRING_PREFIX, "SYST:MQTT:PREF", parsed->argument, writer->write_text);
+}
+
+static void command_syst_mqtt_pref_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    scpi_handler_mqtt_query_string(mqtt_svc_get_prefix, "SYST:MQTT:PREF?", writer->write_text);
+}
+
+static void command_syst_mqtt_stat_query(
+    scpi_handler_parsed_command_t *parsed,
+    const scpi_handler_response_writer_t *writer)
+{
+    (void)parsed;
+    scpi_handler_mqtt_query_status(writer->write_text);
+}
+
+static const scpi_handler_command_entry_t s_mqtt_commands[] = {
+    {"SYST:MQTT:URI", command_syst_mqtt_uri},
+    {"SYSTEM:MQTT:URI", command_syst_mqtt_uri},
+    {":SYST:MQTT:URI", command_syst_mqtt_uri},
+    {":SYSTEM:MQTT:URI", command_syst_mqtt_uri},
+    {"SYST:MQTT:URI?", command_syst_mqtt_uri_query},
+    {"SYSTEM:MQTT:URI?", command_syst_mqtt_uri_query},
+    {":SYST:MQTT:URI?", command_syst_mqtt_uri_query},
+    {":SYSTEM:MQTT:URI?", command_syst_mqtt_uri_query},
+    {"SYST:MQTT:USER", command_syst_mqtt_user},
+    {"SYSTEM:MQTT:USER", command_syst_mqtt_user},
+    {":SYST:MQTT:USER", command_syst_mqtt_user},
+    {":SYSTEM:MQTT:USER", command_syst_mqtt_user},
+    {"SYST:MQTT:USER?", command_syst_mqtt_user_query},
+    {"SYSTEM:MQTT:USER?", command_syst_mqtt_user_query},
+    {":SYST:MQTT:USER?", command_syst_mqtt_user_query},
+    {":SYSTEM:MQTT:USER?", command_syst_mqtt_user_query},
+    {"SYST:MQTT:PASS", command_syst_mqtt_pass},
+    {"SYSTEM:MQTT:PASS", command_syst_mqtt_pass},
+    {":SYST:MQTT:PASS", command_syst_mqtt_pass},
+    {":SYSTEM:MQTT:PASS", command_syst_mqtt_pass},
+    {"SYST:MQTT:PASSWORD", command_syst_mqtt_pass},
+    {"SYSTEM:MQTT:PASSWORD", command_syst_mqtt_pass},
+    {":SYST:MQTT:PASSWORD", command_syst_mqtt_pass},
+    {":SYSTEM:MQTT:PASSWORD", command_syst_mqtt_pass},
+    {"SYST:MQTT:PASS?", command_syst_mqtt_pass_query},
+    {"SYSTEM:MQTT:PASS?", command_syst_mqtt_pass_query},
+    {":SYST:MQTT:PASS?", command_syst_mqtt_pass_query},
+    {":SYSTEM:MQTT:PASS?", command_syst_mqtt_pass_query},
+    {"SYST:MQTT:PASSWORD?", command_syst_mqtt_pass_query},
+    {"SYSTEM:MQTT:PASSWORD?", command_syst_mqtt_pass_query},
+    {":SYST:MQTT:PASSWORD?", command_syst_mqtt_pass_query},
+    {":SYSTEM:MQTT:PASSWORD?", command_syst_mqtt_pass_query},
+    {"SYST:MQTT:ENAB", command_syst_mqtt_enab},
+    {"SYSTEM:MQTT:ENAB", command_syst_mqtt_enab},
+    {":SYST:MQTT:ENAB", command_syst_mqtt_enab},
+    {":SYSTEM:MQTT:ENAB", command_syst_mqtt_enab},
+    {"SYST:MQTT:ENABLE", command_syst_mqtt_enab},
+    {"SYSTEM:MQTT:ENABLE", command_syst_mqtt_enab},
+    {":SYST:MQTT:ENABLE", command_syst_mqtt_enab},
+    {":SYSTEM:MQTT:ENABLE", command_syst_mqtt_enab},
+    {"SYST:MQTT:ENAB?", command_syst_mqtt_enab_query},
+    {"SYSTEM:MQTT:ENAB?", command_syst_mqtt_enab_query},
+    {":SYST:MQTT:ENAB?", command_syst_mqtt_enab_query},
+    {":SYSTEM:MQTT:ENAB?", command_syst_mqtt_enab_query},
+    {"SYST:MQTT:ENABLE?", command_syst_mqtt_enab_query},
+    {"SYSTEM:MQTT:ENABLE?", command_syst_mqtt_enab_query},
+    {":SYST:MQTT:ENABLE?", command_syst_mqtt_enab_query},
+    {":SYSTEM:MQTT:ENABLE?", command_syst_mqtt_enab_query},
+    {"SYST:MQTT:INT", command_syst_mqtt_int},
+    {"SYSTEM:MQTT:INT", command_syst_mqtt_int},
+    {":SYST:MQTT:INT", command_syst_mqtt_int},
+    {":SYSTEM:MQTT:INT", command_syst_mqtt_int},
+    {"SYST:MQTT:INTERVAL", command_syst_mqtt_int},
+    {"SYSTEM:MQTT:INTERVAL", command_syst_mqtt_int},
+    {":SYST:MQTT:INTERVAL", command_syst_mqtt_int},
+    {":SYSTEM:MQTT:INTERVAL", command_syst_mqtt_int},
+    {"SYST:MQTT:INT?", command_syst_mqtt_int_query},
+    {"SYSTEM:MQTT:INT?", command_syst_mqtt_int_query},
+    {":SYST:MQTT:INT?", command_syst_mqtt_int_query},
+    {":SYSTEM:MQTT:INT?", command_syst_mqtt_int_query},
+    {"SYST:MQTT:INTERVAL?", command_syst_mqtt_int_query},
+    {"SYSTEM:MQTT:INTERVAL?", command_syst_mqtt_int_query},
+    {":SYST:MQTT:INTERVAL?", command_syst_mqtt_int_query},
+    {":SYSTEM:MQTT:INTERVAL?", command_syst_mqtt_int_query},
+    {"SYST:MQTT:PREF", command_syst_mqtt_pref},
+    {"SYSTEM:MQTT:PREF", command_syst_mqtt_pref},
+    {":SYST:MQTT:PREF", command_syst_mqtt_pref},
+    {":SYSTEM:MQTT:PREF", command_syst_mqtt_pref},
+    {"SYST:MQTT:PREFIX", command_syst_mqtt_pref},
+    {"SYSTEM:MQTT:PREFIX", command_syst_mqtt_pref},
+    {":SYST:MQTT:PREFIX", command_syst_mqtt_pref},
+    {":SYSTEM:MQTT:PREFIX", command_syst_mqtt_pref},
+    {"SYST:MQTT:PREF?", command_syst_mqtt_pref_query},
+    {"SYSTEM:MQTT:PREF?", command_syst_mqtt_pref_query},
+    {":SYST:MQTT:PREF?", command_syst_mqtt_pref_query},
+    {":SYSTEM:MQTT:PREF?", command_syst_mqtt_pref_query},
+    {"SYST:MQTT:PREFIX?", command_syst_mqtt_pref_query},
+    {"SYSTEM:MQTT:PREFIX?", command_syst_mqtt_pref_query},
+    {":SYST:MQTT:PREFIX?", command_syst_mqtt_pref_query},
+    {":SYSTEM:MQTT:PREFIX?", command_syst_mqtt_pref_query},
+    {"SYST:MQTT:STAT?", command_syst_mqtt_stat_query},
+    {"SYSTEM:MQTT:STAT?", command_syst_mqtt_stat_query},
+    {":SYST:MQTT:STAT?", command_syst_mqtt_stat_query},
+    {":SYSTEM:MQTT:STAT?", command_syst_mqtt_stat_query},
+    {"SYST:MQTT:STATUS?", command_syst_mqtt_stat_query},
+    {"SYSTEM:MQTT:STATUS?", command_syst_mqtt_stat_query},
+    {":SYST:MQTT:STATUS?", command_syst_mqtt_stat_query},
+    {":SYSTEM:MQTT:STATUS?", command_syst_mqtt_stat_query},
+};
+
+const scpi_handler_command_module_t scpi_handler_mqtt_module = {
+    s_mqtt_commands, sizeof(s_mqtt_commands) / sizeof(s_mqtt_commands[0]),
+};
