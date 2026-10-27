@@ -26,6 +26,7 @@
 #include "mlx90614.h"
 /* Compile-time regression: the vendor header must tolerate repeated inclusion. */
 #include "mlx90614.h"
+#include "sdkconfig.h"
 #include "unity.h"
 
 static char s_text[128];
@@ -103,6 +104,7 @@ TEST_CASE("pyrometer conversion and scalar queries retain signed temperatures", 
     const int32_t values[] = {-131500, 0, 268500, INT32_MIN};
     const char *expected[] = {"-13.1500", "0.0000", "26.8500", "-214748.3648"};
     for (unsigned i = 0; i < 4; ++i) {
+        state.history = (mlx90614_history_t){.samples = state.history.samples};
         mlx90614_history_append(&state.history, (mlx90614_sample_t){i, values[i]});
         mlx90614_query_temperature(i % 2 ? "1" : "ch1", &s_writer, &state);
         TEST_ASSERT_EQUAL_STRING(expected[i], s_text);
@@ -110,9 +112,77 @@ TEST_CASE("pyrometer conversion and scalar queries retain signed temperatures", 
     state.history.latest_valid = false;
     mlx90614_query_temperature("CH1", &s_writer, &state);
     TEST_ASSERT_EQUAL_STRING("ERR,\"Temperature unavailable\"", s_text);
+    state.history = (mlx90614_history_t){.samples = state.history.samples};
     mlx90614_history_append(&state.history, (mlx90614_sample_t){5, -100});
     mlx90614_query_temperature("CH1", &s_writer, &state);
     TEST_ASSERT_EQUAL_STRING("-0.0100", s_text);
+    finish(&state);
+}
+
+TEST_CASE("pyrometer scalar averages newest configured polls across ring wrap", "[mlx90614]")
+{
+    mlx90614_state_t state;
+    prepare(&state);
+    mlx90614_query_temperature("1", &s_writer, &state);
+    TEST_ASSERT_EQUAL_STRING("ERR,\"Temperature unavailable\"", s_text);
+
+    const size_t window = CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT;
+    for (size_t i = 0; i < MLX90614_HISTORY_CAPACITY + window; ++i) {
+        mlx90614_history_append(&state.history, (mlx90614_sample_t){i, (int32_t)i * 200});
+        /* Check partial windows at startup as well as the full, wrapped ring. */
+        if (i < window || i == MLX90614_HISTORY_CAPACITY + window - 1) {
+            const size_t count = i + 1 < window ? i + 1 : window;
+            const int32_t expected = (int32_t)(2 * i - (count - 1)) * 100;
+            char response[24];
+            snprintf(response, sizeof(response), "%ld.%04ld",
+                     (long)(expected / 10000), (long)(expected % 10000));
+            mlx90614_query_temperature("CH1", &s_writer, &state);
+            TEST_ASSERT_EQUAL_STRING(response, s_text);
+            /* Repeated queries must not add samples or change the window. */
+            mlx90614_query_temperature("1", &s_writer, &state);
+            TEST_ASSERT_EQUAL_STRING(response, s_text);
+        }
+    }
+    mlx90614_query_history("1,1,999", &s_writer, &state);
+    TEST_ASSERT_EQUAL_HEX32((MLX90614_HISTORY_CAPACITY + window - 1) * 200,
+                          read_u32(s_binary + 7));
+    finish(&state);
+}
+
+TEST_CASE("pyrometer averages signed values with rounding and a wide accumulator", "[mlx90614]")
+{
+    mlx90614_state_t state;
+    prepare(&state);
+    const size_t window = CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT;
+    const int32_t values[] = {INT32_MAX, INT32_MIN};
+    const char *expected[] = {"214748.3647", "-214748.3648"};
+    for (size_t j = 0; j < 2; ++j) {
+        for (size_t i = 0; i < window; ++i) {
+            mlx90614_history_append(&state.history, (mlx90614_sample_t){i, values[j]});
+        }
+        mlx90614_query_temperature("1", &s_writer, &state);
+        TEST_ASSERT_EQUAL_STRING(expected[j], s_text);
+    }
+    /* Opposite signs cancel before rounding; an odd leftover sample is zero. */
+    for (size_t i = 0; i < window; ++i) {
+        const int32_t value = i == window - 1 && window % 2 != 0 ? 0 :
+            (i % 2 == 0 ? 10000 : -10000);
+        mlx90614_history_append(&state.history, (mlx90614_sample_t){i, value});
+    }
+    mlx90614_query_temperature("1", &s_writer, &state);
+    TEST_ASSERT_EQUAL_STRING("0.0000", s_text);
+    /* Even windows hit the rounding midpoint; odd windows fall just below it. */
+    for (int32_t sign = -1; sign <= 1; sign += 2) {
+        for (size_t i = 0; i < window; ++i) {
+            const int32_t value = i == 0 ? sign * (int32_t)(window + window / 2) : 0;
+            mlx90614_history_append(&state.history, (mlx90614_sample_t){i, value});
+        }
+        mlx90614_query_temperature("1", &s_writer, &state);
+        const char *rounded = window % 2 == 0 ?
+            (sign < 0 ? "-0.0002" : "0.0002") :
+            (sign < 0 ? "-0.0001" : "0.0001");
+        TEST_ASSERT_EQUAL_STRING(rounded, s_text);
+    }
     finish(&state);
 }
 
@@ -194,6 +264,8 @@ TEST_CASE("pyrometer failed reads preserve history and successful reads recover"
         TEST_ASSERT_EQUAL(errors[i], mlx90614_store_result(&state, errors[i], 15000, i));
         TEST_ASSERT_FALSE(state.history.latest_valid);
         TEST_ASSERT_EQUAL(1, state.history.count);
+        mlx90614_query_temperature("1", &s_writer, &state);
+        TEST_ASSERT_EQUAL_STRING("ERR,\"Temperature unavailable\"", s_text);
     }
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_RESPONSE,
                       mlx90614_store_result(&state, ESP_OK, 0xffff, 1));
@@ -203,6 +275,9 @@ TEST_CASE("pyrometer failed reads preserve history and successful reads recover"
     TEST_ASSERT_EQUAL(2, state.history.count);
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, mlx90614_history_at(&state.history, 0)->time_ms);
     TEST_ASSERT_EQUAL_UINT32(2, mlx90614_history_at(&state.history, 1)->time_ms);
+    mlx90614_query_temperature("1", &s_writer, &state);
+    TEST_ASSERT_EQUAL_STRING(CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT == 1 ?
+                             "26.8500" : "6.8500", s_text);
     finish(&state);
 }
 
@@ -296,7 +371,8 @@ TEST_CASE("pyrometer busy history does not block sampling or scalar queries", "[
     TEST_ASSERT_EQUAL(pdTRUE, xSemaphoreTake(s_stalled.entered, pdMS_TO_TICKS(1000)));
     const esp_err_t stored = mlx90614_store_result(&state, ESP_OK, 15000, 2);
     mlx90614_query_temperature("1", &s_writer, &state);
-    const bool scalar_ok = strcmp(s_text, "26.8500") == 0;
+    const bool scalar_ok = strcmp(s_text, CONFIG_PSUEXT_MLX90614_AVERAGE_COUNT == 1 ?
+                                  "26.8500" : "6.8500") == 0;
     mlx90614_query_history("1", &s_writer, &state);
     const bool busy = strcmp(s_text, "ERR,\"Temperature history busy\"") == 0;
     const bool no_binary = s_length == 0;
