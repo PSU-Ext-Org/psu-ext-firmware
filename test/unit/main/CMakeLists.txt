@@ -15,7 +15,7 @@
 idf_component_register(
     SRCS "test_main.c" "../../support/test_nvs.c"
     PRIV_INCLUDE_DIRS "../../support"
-    PRIV_REQUIRES unity nvs_flash
+    PRIV_REQUIRES unity nvs_flash firmware_info
 )
 
 # Test-only isolation applies to all service and test translation units.

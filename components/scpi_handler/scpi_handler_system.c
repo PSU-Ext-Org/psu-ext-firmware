@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include "esp_mac.h"
+#include "firmware_version.h"
 #include "timebase_svc.h"
 #include "scpi_handler_datetime.h"
 
@@ -145,7 +147,18 @@ static void command_idn_query(scpi_handler_parsed_command_t *parsed,
     const scpi_handler_response_writer_t *writer)
 {
     (void)parsed;
-    writer->write_text("PSU-EXT,ESP32-S3,0001,0.1.0");
+    uint8_t mac[6];
+    const esp_err_t err = esp_efuse_mac_get_default(mac);
+    if (err != ESP_OK) {
+        scpi_handler_write_esp_error(writer->write_text, "*IDN?", err);
+        return;
+    }
+    char response[64];
+    snprintf(response, sizeof(response),
+        "MaxEELabs,PSU-EXT,PE_%02X%02X%02X%02X%02X%02X,%s",
+        (unsigned)mac[0], (unsigned)mac[1], (unsigned)mac[2],
+        (unsigned)mac[3], (unsigned)mac[4], (unsigned)mac[5], g_firmware_version);
+    writer->write_text(response);
 }
 
 static const scpi_handler_command_entry_t s_system_commands[] = {

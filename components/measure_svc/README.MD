@@ -208,3 +208,23 @@ read results, and MQTT summaries round positive halves upward and clamp to
 average is converted. NaN converts to zero; positive infinity saturates;
 negative infinity converts to zero. Calibration blobs and public wire formats
 are unchanged. The private history ring uses additional PSRAM for doubles.
+
+## Relative measurement queries
+
+REL offsets are RAM-only and cleared when calibration starts. Voltage/current
+scalar reads subtract REL after averaging and clamp at zero. Relative history
+copies subtract the current offset from every exported sample, including samples
+collected before the offset changed. Absolute reads, history, events, and
+protection inputs remain unchanged.
+
+Power history retains each original precise CH1 voltage/current pair in a
+16 KB PSRAM sidecar. Relative power clamps each input after subtracting its
+current offset, then multiplies the corrected inputs. Scalar relative power
+averages those products over the configured power window, converting to u4 only
+at the end. With both offsets zero, the original signed-product behavior is
+preserved. There is no separate power REL offset.
+
+`measure_svc_copy_relative_samples()` holds the coordination guard through the
+history copy so all records use one offset snapshot. Existing absolute copy APIs
+remain available. Copies return chronological records; `start_offset` skips
+oldest retained samples. REL never rewrites history.

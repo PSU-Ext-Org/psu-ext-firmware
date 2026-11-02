@@ -78,7 +78,7 @@ The interrupt watchdog retains its existing 300 ms timeout.
 The separate `test/unit/sdkconfig.defaults` configures the Unity runner and its
 USB Serial/JTAG console. Its generated configuration is also ignored.
 
-## Relative voltage and current readings
+## Relative voltage, current, and power readings
 
 `MEAS:VOLT:REL <channel>,<volts>` sets a REL offset for `CH0` or `CH1`.
 `MEAS:CURR:REL CH1,<amps>` sets the current offset. Numeric channel aliases
@@ -91,9 +91,16 @@ readings. These REL commands accept an optional trailing semicolon, without
 command chaining. Offsets are nonnegative, rounded to four decimal places,
 and held only in RAM; reboot resets them to zero.
 
-REL affects scalar voltage/current SCPI queries and OLED voltage/current
-readings. Results below zero are clamped to zero. DATA queries and stored
-sample history, MQTT, calibration, and derived power remain absolute.
+REL affects scalar and DATA voltage/current SCPI queries and OLED voltage/current
+readings. Results below zero are clamped to zero. DATA applies the current offset
+to all returned samples, including those collected before REL changed.
+
+`MEAS:POWER?` and `MEAS:POWER:DATA?` use each original CH1 voltage/current pair,
+subtract the corresponding REL offsets, clamp each input to zero, and multiply.
+The scalar query averages those products using the power averaging count.
+There is no separate power REL command. When both offsets are zero, power queries
+retain their original absolute behavior. Stored history, MQTT, calibration,
+protection, and OLED power remain absolute.
 
 A successful calibration transaction start clears all three REL offsets.
 Nonzero offsets are rejected while the transaction is OPEN or COMMITTING.

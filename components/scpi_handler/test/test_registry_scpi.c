@@ -17,8 +17,11 @@
 #include "scpi_handler.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "esp_mac.h"
+#include "firmware_version.h"
 #include "unity.h"
 
 static char s_response[160];
@@ -85,7 +88,16 @@ TEST_CASE("SCPI extension tables register atomically and dispatch through transp
     TEST_ASSERT_EQUAL(2, s_calls);
     run_command("*IDN?");
     TEST_ASSERT_EQUAL(2, s_calls);
-    TEST_ASSERT_NOT_NULL(strstr(s_response, "PSU-EXT"));
+    uint8_t mac[6];
+    TEST_ESP_OK(esp_efuse_mac_get_default(mac));
+    char expected_idn[64];
+    snprintf(expected_idn, sizeof(expected_idn),
+        "MaxEELabs,PSU-EXT,PE_%02X%02X%02X%02X%02X%02X,%s",
+        (unsigned)mac[0], (unsigned)mac[1], (unsigned)mac[2],
+        (unsigned)mac[3], (unsigned)mac[4], (unsigned)mac[5], g_firmware_version);
+    TEST_ASSERT_EQUAL_STRING(expected_idn, s_response);
+    run_command("*IDN?");
+    TEST_ASSERT_EQUAL_STRING(expected_idn, s_response);
 
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, scpi_handler_register_commands(commands, 3));
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, scpi_handler_register_commands(NULL, 1));

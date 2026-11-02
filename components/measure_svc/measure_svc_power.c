@@ -45,6 +45,8 @@ static void emit_power(const measure_svc_sample_event_t *latest)
         .physical_input = config->output_current_input,
         .time_ms = latest->time_ms,
         .precise_u4 = precise,
+        .power_voltage_u4 = s_voltage.event.precise_u4,
+        .power_current_u4 = s_current.event.precise_u4,
         .value_u4 = measure_svc_precision_to_u4(precise),
     };
     measure_svc_event_bus_publish(&event);

@@ -55,7 +55,10 @@ esp_err_t measure_svc_set_relative_u4(
 /** @brief Query the REL offset for voltage CH0/CH1 or current CH1. */
 esp_err_t measure_svc_get_relative_u4(
     measure_channel_t channel, measure_kind_t kind, uint32_t *offset_u4);
-/** @brief Read the absolute average minus REL, clamped to zero. */
+/** @brief Read V/I average minus REL, or average REL-corrected power pairs.
+ * Voltage/current clamp after averaging; power clamps each input before multiplying.
+ * Power with both offsets zero preserves the absolute average.
+ */
 esp_err_t measure_svc_read_relative(
     measure_channel_t channel, measure_kind_t kind, uint32_t *value_u4);
 

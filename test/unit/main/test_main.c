@@ -15,8 +15,12 @@
  */
 
 #include "unity.h"
+#include "firmware_version.h"
 #include "test_nvs.h"
 #include <stdio.h>
+
+/* Test app identity: deliberately distinct from a production release. */
+const char g_firmware_version[] = "unit-test";
 
 void app_main(void)
 {

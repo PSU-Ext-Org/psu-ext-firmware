@@ -57,6 +57,8 @@ typedef struct {
     uint32_t source_generation; /**< Provider conversion ID; zero for derived values. */
     uint16_t pga_full_scale_mv; /**< PGA full-scale magnitude used for the conversion. */
     double precise_u4; /**< Signed fractional u4; authoritative for averaging and power. */
+    double power_voltage_u4; /**< Original precise CH1 voltage for a derived power event. */
+    double power_current_u4; /**< Original precise CH1 current for a derived power event. */
     uint32_t value_u4; /**< Unsigned projection of precise_u4 for immediate consumers. */
 } measure_svc_sample_event_t;
 
@@ -72,15 +74,24 @@ esp_err_t measure_svc_set_average_count(measure_kind_t kind, uint32_t count);
 esp_err_t measure_svc_get_average_count(measure_kind_t kind, uint32_t *count);
 /** @brief Average the newest configured number of calibrated history samples. */
 esp_err_t measure_svc_read(measure_channel_t channel, measure_kind_t kind, uint32_t *value_u4);
-/** @brief Copy voltage history starting at the newest-relative offset. */
+/**
+ * @brief Copy history with current REL offsets, in chronological order.
+ * @param start_offset Number of oldest retained samples to skip (as in absolute copies).
+ * Power uses its original precise V/I pair and the current CH1 offsets.
+ * Stored history is unchanged; one offset snapshot applies to the complete copy.
+ */
+esp_err_t measure_svc_copy_relative_samples(
+    measure_channel_t channel, measure_kind_t kind, size_t start_offset,
+    size_t max_count, measure_svc_sample_t *samples, size_t *copied_count);
+/** @brief Copy voltage history starting at the oldest-relative offset. */
 esp_err_t measure_svc_copy_voltage_samples(
     measure_channel_t channel, size_t start_offset, size_t max_count,
     measure_svc_sample_t *samples, size_t *copied_count);
-/** @brief Copy CH1 current history starting at the newest-relative offset. */
+/** @brief Copy CH1 current history starting at the oldest-relative offset. */
 esp_err_t measure_svc_copy_current_samples(
     measure_channel_t channel, size_t start_offset, size_t max_count,
     measure_svc_sample_t *samples, size_t *copied_count);
-/** @brief Copy CH1 derived-power history starting at the newest-relative offset. */
+/** @brief Copy CH1 derived-power history starting at the oldest-relative offset. */
 esp_err_t measure_svc_copy_power_samples(
     measure_channel_t channel, size_t start_offset, size_t max_count,
     measure_svc_sample_t *samples, size_t *copied_count);
