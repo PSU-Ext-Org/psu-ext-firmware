@@ -188,28 +188,8 @@ static void scpi_handler_handle_measure_data_query(
         return;
     }
 
-    if (kind == MEASURE_KIND_CURRENT) {
-        err = measure_svc_copy_current_samples(
-            args.channel,
-            args.start_offset,
-            args.count,
-            s_data_samples,
-            &copied_count);
-    } else if (kind == MEASURE_KIND_POWER) {
-        err = measure_svc_copy_power_samples(
-            args.channel,
-            args.start_offset,
-            args.count,
-            s_data_samples,
-            &copied_count);
-    } else {
-        err = measure_svc_copy_voltage_samples(
-            args.channel,
-            args.start_offset,
-            args.count,
-            s_data_samples,
-            &copied_count);
-    }
+    err = measure_svc_copy_relative_samples(args.channel, kind, args.start_offset,
+        args.count, s_data_samples, &copied_count);
     if (err != ESP_OK) {
         xSemaphoreGive(s_data_response_lock);
         scpi_handler_write_esp_error(writer->write_text, context, err);

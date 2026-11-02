@@ -35,5 +35,6 @@ idf_component_register(
         "scpi_handler_trigger.c"
         "scpi_handler_wifi.c"
     INCLUDE_DIRS "include"
+    PRIV_REQUIRES esp_hw_support firmware_info
     REQUIRES freertos wifi_manager mqtt_svc measure_svc output_ctrl protection_svc trigger_svc timer_svc timebase_svc
 )

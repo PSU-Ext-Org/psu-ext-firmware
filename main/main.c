@@ -26,6 +26,7 @@
 
 #include "clock_test.h"
 #include "flash_store.h"
+#include "firmware_version.h"
 #include "i2c_1_modules.h"
 #include "measure_svc.h"
 #include "mqtt_svc.h"
@@ -40,6 +41,9 @@
 #include "usb_com.h"
 #include "wifi_connection.h"
 #include "wifi_manager.h"
+
+/* Update this constant when preparing a firmware release. */
+const char g_firmware_version[] = "1.3.1";
 
 static const char *TAG = "main";
 

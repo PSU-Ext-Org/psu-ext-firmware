@@ -117,7 +117,8 @@ The display and pyrometer test groups are independently omitted when disabled.
 
 ## REL and calibration protection tests
 
-Select `[rel]` for REL parsing, scalar subtraction/history isolation, calibration
+Select `[rel]` for REL parsing, scalar subtraction/history isolation, relative DATA,
+paired-input power averaging, concurrent DATA/REL updates, calibration
 clearing, transaction synchronization, and protection bypass/resumption tests.
 The `[output]` tests drive the real CH1 relay; disconnect the load before running.
 The calibration lifecycle/failure tests also check protection resumption after

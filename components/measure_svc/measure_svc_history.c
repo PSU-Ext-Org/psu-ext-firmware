@@ -47,6 +47,22 @@ static measure_svc_sample_ring_t s_rings[4] = {
 };
 static SemaphoreHandle_t s_history_lock;
 
+typedef struct {
+    double voltage_u4;
+    double current_u4;
+} power_inputs_t;
+
+/* Indexed and protected together with the power ring; other rings need no pairs. */
+static power_inputs_t *s_power_inputs;
+
+static double relative_power(size_t index, uint32_t voltage_offset_u4, uint32_t current_offset_u4)
+{
+    const double voltage = s_power_inputs[index].voltage_u4 - voltage_offset_u4;
+    const double current = s_power_inputs[index].current_u4 - current_offset_u4;
+    return (voltage > 0.0 ? voltage : 0.0) *
+        (current > 0.0 ? current : 0.0) / 10000.0;
+}
+
 static esp_err_t slot_index(measure_channel_t channel, measure_kind_t kind, size_t *index)
 {
     if (index == NULL) {
@@ -68,6 +84,8 @@ static esp_err_t slot_index(measure_channel_t channel, measure_kind_t kind, size
 
 static void free_rings(void)
 {
+    heap_caps_free(s_power_inputs);
+    s_power_inputs = NULL;
     for (size_t i = 0; i < 4U; ++i) {
         if (s_rings[i].samples != NULL) {
             heap_caps_free(s_rings[i].samples);
@@ -100,8 +118,17 @@ esp_err_t measure_svc_history_init(void)
         }
     }
 
-    ESP_LOGI(TAG, "sample rings allocated in PSRAM: %u bytes total",
-        (unsigned)(4U * MEASURE_SVC_MAX_SAMPLE_CAPACITY * sizeof(precise_sample_t)));
+    if (s_power_inputs == NULL) {
+        s_power_inputs = heap_caps_calloc(MEASURE_SVC_MAX_SAMPLE_CAPACITY,
+            sizeof(*s_power_inputs), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (s_power_inputs == NULL) {
+            free_rings();
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    ESP_LOGI(TAG, "sample rings and power inputs allocated in PSRAM: %u bytes total",
+        (unsigned)(MEASURE_SVC_MAX_SAMPLE_CAPACITY *
+            (4U * sizeof(precise_sample_t) + sizeof(*s_power_inputs))));
     return ESP_OK;
 }
 
@@ -121,6 +148,12 @@ static void history_listener(const measure_svc_sample_event_t *event, void *cont
             .time_ms = event->time_ms,
             .precise_u4 = event->precise_u4,
         };
+        if (event->kind == MEASURE_KIND_POWER) {
+            s_power_inputs[ring->write_index] = (power_inputs_t){
+                .voltage_u4 = event->power_voltage_u4,
+                .current_u4 = event->power_current_u4,
+            };
+        }
         ring->write_index = (ring->write_index + 1U) % ring->capacity;
         if (ring->count < ring->capacity) {
             ++ring->count;
@@ -138,13 +171,15 @@ esp_err_t measure_svc_history_register_listeners(void)
     return measure_svc_register_sample_listener(MEASURE_KIND_POWER, history_listener, NULL);
 }
 
-esp_err_t measure_svc_history_copy_samples(
+esp_err_t measure_svc_history_copy_relative_samples(
     measure_channel_t channel,
     measure_kind_t kind,
     size_t start_offset,
     size_t max_count,
     measure_svc_sample_t *samples,
-    size_t *copied_count)
+    size_t *copied_count,
+    uint32_t offset_u4,
+    uint32_t current_offset_u4)
 {
     size_t index;
     if ((copied_count == NULL) || ((max_count > 0U) && (samples == NULL))) {
@@ -167,16 +202,34 @@ esp_err_t measure_svc_history_copy_samples(
         }
         const size_t oldest = (ring->write_index + ring->capacity - ring->count) % ring->capacity;
         for (size_t i = 0; i < count; ++i) {
-            const precise_sample_t *sample = &ring->samples[(oldest + start_offset + i) % ring->capacity];
+            const size_t sample_index = (oldest + start_offset + i) % ring->capacity;
+            const precise_sample_t *sample = &ring->samples[sample_index];
+            uint32_t value = measure_svc_precision_to_u4(sample->precise_u4);
+            if (kind == MEASURE_KIND_POWER) {
+                if (offset_u4 != 0U || current_offset_u4 != 0U) {
+                    value = measure_svc_precision_to_u4(
+                        relative_power(sample_index, offset_u4, current_offset_u4));
+                }
+            } else {
+                value = value > offset_u4 ? value - offset_u4 : 0U;
+            }
             samples[i] = (measure_svc_sample_t){
                 .time_ms = sample->time_ms,
-                .value_u4 = measure_svc_precision_to_u4(sample->precise_u4),
+                .value_u4 = value,
             };
         }
         *copied_count = count;
     }
     xSemaphoreGive(s_history_lock);
     return ESP_OK;
+}
+
+esp_err_t measure_svc_history_copy_samples(
+    measure_channel_t channel, measure_kind_t kind, size_t start_offset,
+    size_t max_count, measure_svc_sample_t *samples, size_t *copied_count)
+{
+    return measure_svc_history_copy_relative_samples(channel, kind, start_offset,
+        max_count, samples, copied_count, 0U, 0U);
 }
 
 esp_err_t measure_svc_history_copy_latest_samples(
@@ -235,9 +288,9 @@ esp_err_t measure_svc_copy_power_samples(
 
 /* Selection and accumulation share one lock so concurrent publications cannot
  * shift the requested window. No shared scratch storage is needed. */
-esp_err_t measure_svc_history_average_latest(
+static esp_err_t history_average_latest(
     measure_channel_t channel, measure_kind_t kind, size_t max_count,
-    uint32_t *value_u4)
+    uint32_t *value_u4, uint32_t voltage_offset_u4, uint32_t current_offset_u4)
 {
     size_t index;
     if (value_u4 == NULL || max_count == 0U) {
@@ -259,9 +312,29 @@ esp_err_t measure_svc_history_average_latest(
     const size_t start = (ring->write_index + ring->capacity - count) % ring->capacity;
     double total = 0.0;
     for (size_t i = 0U; i < count; ++i) {
-        total += ring->samples[(start + i) % ring->capacity].precise_u4;
+        const size_t sample_index = (start + i) % ring->capacity;
+        if (kind == MEASURE_KIND_POWER && (voltage_offset_u4 != 0U || current_offset_u4 != 0U)) {
+            total += relative_power(sample_index, voltage_offset_u4, current_offset_u4);
+        } else {
+            total += ring->samples[sample_index].precise_u4;
+        }
     }
     *value_u4 = measure_svc_precision_to_u4(total / (double)count);
     xSemaphoreGive(s_history_lock);
     return ESP_OK;
+}
+
+esp_err_t measure_svc_history_average_latest(
+    measure_channel_t channel, measure_kind_t kind, size_t max_count,
+    uint32_t *value_u4)
+{
+    return history_average_latest(channel, kind, max_count, value_u4, 0U, 0U);
+}
+
+esp_err_t measure_svc_history_average_relative_power(
+    size_t max_count, uint32_t voltage_offset_u4, uint32_t current_offset_u4,
+    uint32_t *value_u4)
+{
+    return history_average_latest(MEASURE_CHANNEL_1, MEASURE_KIND_POWER, max_count,
+        value_u4, voltage_offset_u4, current_offset_u4);
 }

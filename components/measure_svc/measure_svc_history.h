@@ -31,10 +31,10 @@ esp_err_t measure_svc_history_init(void);
 /** @brief Register history consumers on the sample event bus. */
 esp_err_t measure_svc_history_register_listeners(void);
 /**
- * @brief Copy samples from a history ring using a newest-relative offset.
+ * @brief Copy samples from a history ring using an oldest-relative offset.
  * @param channel Logical channel to inspect.
  * @param kind Voltage, current, or power history.
- * @param start_offset Number of newest samples to skip.
+ * @param start_offset Number of oldest retained samples to skip.
  * @param max_count Capacity of @p samples.
  * @param samples Destination array.
  * @param copied_count Number of samples written.
@@ -50,4 +50,17 @@ esp_err_t measure_svc_history_copy_latest_samples(
 /** @brief Average signed fractional newest samples atomically; convert once to unsigned u4. */
 esp_err_t measure_svc_history_average_latest(
     measure_channel_t channel, measure_kind_t kind, size_t max_count,
+    uint32_t *value_u4);
+
+/** @brief Copy using supplied offsets; caller owns the REL snapshot.
+ * For V/I, offset_u4 is the quantity's offset. For power it is the voltage offset.
+ * current_offset_u4 is used only for power. Zero offsets preserve absolute values.
+ */
+esp_err_t measure_svc_history_copy_relative_samples(
+    measure_channel_t channel, measure_kind_t kind, size_t start_offset,
+    size_t max_count, measure_svc_sample_t *samples, size_t *copied_count,
+    uint32_t offset_u4, uint32_t current_offset_u4);
+/** @brief Average original power pairs corrected with supplied CH1 offsets. */
+esp_err_t measure_svc_history_average_relative_power(
+    size_t max_count, uint32_t voltage_offset_u4, uint32_t current_offset_u4,
     uint32_t *value_u4);

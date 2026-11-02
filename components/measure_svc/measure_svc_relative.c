@@ -17,6 +17,7 @@
 #include "measure_svc_relative.h"
 #include "measure_svc.h"
 #include "measure_svc_samples.h"
+#include "measure_svc_history.h"
 #include "measure_svc_coordination.h"
 #include "esp_check.h"
 #include <stddef.h>
@@ -80,15 +81,44 @@ esp_err_t measure_svc_read_relative(
     measure_channel_t channel, measure_kind_t kind, uint32_t *value_u4)
 {
     uint32_t *offset = relative_offset(kind, channel);
-    if ((offset == NULL) || (value_u4 == NULL)) {
+    const bool power = kind == MEASURE_KIND_POWER && channel == MEASURE_CHANNEL_1;
+    if ((!power && offset == NULL) || value_u4 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
     bool active;
     ESP_RETURN_ON_ERROR(measure_svc_coordination_begin(&active), TAG, "taking coordination lock failed");
-    esp_err_t err = measure_svc_read(channel, kind, value_u4);
-    if (err == ESP_OK) {
-        *value_u4 = *value_u4 > *offset ? *value_u4 - *offset : 0U;
+    esp_err_t err;
+    if (power) {
+        uint32_t count;
+        err = measure_svc_get_average_count(kind, &count);
+        if (err == ESP_OK) {
+            err = measure_svc_history_average_relative_power(
+                count, s_relative_u4[1], s_relative_u4[2], value_u4);
+        }
+    } else {
+        err = measure_svc_read(channel, kind, value_u4);
+        if (err == ESP_OK) {
+            *value_u4 = *value_u4 > *offset ? *value_u4 - *offset : 0U;
+        }
     }
+    measure_svc_coordination_end();
+    return err;
+}
+
+esp_err_t measure_svc_copy_relative_samples(
+    measure_channel_t channel, measure_kind_t kind, size_t start_offset,
+    size_t max_count, measure_svc_sample_t *samples, size_t *copied_count)
+{
+    const uint32_t *offset = relative_offset(kind, channel);
+    const bool power = kind == MEASURE_KIND_POWER && channel == MEASURE_CHANNEL_1;
+    if (!power && offset == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    bool active;
+    ESP_RETURN_ON_ERROR(measure_svc_coordination_begin(&active), TAG, "taking coordination lock failed");
+    const esp_err_t err = measure_svc_history_copy_relative_samples(channel, kind,
+        start_offset, max_count, samples, copied_count,
+        power ? s_relative_u4[1] : *offset, power ? s_relative_u4[2] : 0U);
     measure_svc_coordination_end();
     return err;
 }
