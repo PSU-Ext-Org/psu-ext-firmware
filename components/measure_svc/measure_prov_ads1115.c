@@ -96,6 +96,18 @@ static const ads1115_range_config_t ADS_RANGES[] = {
     {.pga_full_scale_mv = 2048U, .hysteresis_top_u4 = 20480U, .hysteresis_bottom_u4 = 3840U},
 };
 
+/* Current sensing: 10 mOhm shunt, INA240A2 (50 V/V). Raw ADC thresholds
+ * include the zero-current offset and leave headroom below full scale.
+ */
+static const ads1115_range_config_t ADS_CURRENT_RANGES[] = {
+    {.pga_full_scale_mv = 256U, .hysteresis_top_u4 = 2400U, .hysteresis_bottom_u4 = 0U},
+    {.pga_full_scale_mv = 512U, .hysteresis_top_u4 = 4800U, .hysteresis_bottom_u4 = 2200U},
+    {.pga_full_scale_mv = 2048U, .hysteresis_top_u4 = 20480U, .hysteresis_bottom_u4 = 4400U},
+};
+
+_Static_assert(sizeof(ADS_CURRENT_RANGES) == sizeof(ADS_RANGES),
+    "current and voltage policies must expose the same ranges");
+
 #define ADS1115_RANGE_COUNT (sizeof(ADS_RANGES) / sizeof(ADS_RANGES[0]))
 
 _Static_assert(ADS1115_RANGE_COUNT > 0U, "configure at least one ADS1115 range");
@@ -118,6 +130,8 @@ static uint16_t s_data_rate_sps = ADS1115_DEFAULT_DATA_RATE_SPS;
 static uint32_t s_rate_epoch;
 static uint32_t s_source_generation;
 static uint8_t s_input_range_index[ADS_CACHE_ENTRY_COUNT];
+/* Set before acquisition starts; immutable while the task runs. */
+static measure_input_t s_current_input = MEASURE_INPUT_UNUSED;
 
 static bool ads1115_pga_bits(uint16_t full_scale_mv, uint16_t *bits)
 {
@@ -143,7 +157,8 @@ static bool ads1115_pga_bits(uint16_t full_scale_mv, uint16_t *bits)
     }
 }
 
-bool measure_prov_ads1115_range_config_validate(void)
+/** @brief Validate headroom, range ordering, and hysteresis for one policy. */
+static bool ads1115_range_policy_validate(const ads1115_range_config_t *ranges)
 {
     if ((ADS1115_RANGE_COUNT == 0U) ||
         (ADS1115_RANGE_COUNT > ADS1115_MAX_RANGE_COUNT)) {
@@ -151,19 +166,26 @@ bool measure_prov_ads1115_range_config_validate(void)
     }
     for (size_t index = 0U; index < ADS1115_RANGE_COUNT; ++index) {
         uint16_t bits;
-        if (!ads1115_pga_bits(ADS_RANGES[index].pga_full_scale_mv, &bits) ||
+        if (!ads1115_pga_bits(ranges[index].pga_full_scale_mv, &bits) ||
+            (ranges[index].pga_full_scale_mv != ADS_RANGES[index].pga_full_scale_mv) ||
             ((index > 0U) &&
-             (ADS_RANGES[index].pga_full_scale_mv <= ADS_RANGES[index - 1U].pga_full_scale_mv)) ||
+             (ranges[index].pga_full_scale_mv <= ranges[index - 1U].pga_full_scale_mv)) ||
             ((index + 1U < ADS1115_RANGE_COUNT) &&
-             (ADS_RANGES[index].hysteresis_top_u4 >=
-              (uint32_t)ADS_RANGES[index].pga_full_scale_mv * 10U)) ||
+             (ranges[index].hysteresis_top_u4 >=
+              (uint32_t)ranges[index].pga_full_scale_mv * 10U)) ||
             ((index > 0U) &&
-             (ADS_RANGES[index].hysteresis_bottom_u4 >=
-              ADS_RANGES[index - 1U].hysteresis_top_u4))) {
+             (ranges[index].hysteresis_bottom_u4 >=
+              ranges[index - 1U].hysteresis_top_u4))) {
             return false;
         }
     }
     return true;
+}
+
+bool measure_prov_ads1115_range_config_validate(void)
+{
+    return ads1115_range_policy_validate(ADS_RANGES) &&
+        ads1115_range_policy_validate(ADS_CURRENT_RANGES);
 }
 
 size_t measure_prov_ads1115_get_configured_pgas(
@@ -189,10 +211,15 @@ bool measure_prov_ads1115_is_pga_configured(uint16_t pga_full_scale_mv)
     return false;
 }
 
-uint8_t measure_prov_ads1115_settling_conversions(uint16_t pga_full_scale_mv)
+uint8_t measure_prov_ads1115_settling_conversions(
+    uint16_t pga_full_scale_mv, bool is_current_input)
 {
+    /* Preserve current's two-conversion acquisition cost when using higher gain.
+     * Extra settling at +/-256 mV remains specific to the voltage dividers.
+     */
     return ADS1115_SETTLING_CONVERSIONS +
-        (pga_full_scale_mv == 256U ? ADS1115_256MV_EXTRA_SETTLING_CONVERSIONS : 0U);
+        (!is_current_input && pga_full_scale_mv == 256U ?
+            ADS1115_256MV_EXTRA_SETTLING_CONVERSIONS : 0U);
 }
 
 /**
@@ -510,22 +537,21 @@ static esp_err_t ads1115_read_single_shot(
 /**
  * @brief Read a conversion after allowing the newly selected MUX/PGA input to settle.
  *
- * The scan selects a different high-impedance divider before every cached
- * sample. The ADS1115 digital filter settles in one conversion, but its
- * switched-capacitor input still has to charge through the external source
- * impedance. Discarding settling conversions prevents the preceding channel
- * from biasing the value that is published and used for calibration. The
- * highest-gain +/-0.256 V setting receives two additional conversions.
+ * Every scan step changes the input. Discard one conversion before accepting
+ * a sample. Voltage dividers retain two additional discards at +/-0.256 V;
+ * the INA240 current input keeps one discard at every gain. This avoids
+ * extending the shared scan when current switches into the lowest range.
  */
 static esp_err_t ads1115_read_settled_single_shot(
     ads1115_mux_t mux,
     uint16_t data_rate_sps,
     uint16_t pga_full_scale_mv,
+    bool is_current_input,
     int16_t *raw_value)
 {
     int16_t discarded_code;
     const uint8_t settling_conversions =
-        measure_prov_ads1115_settling_conversions(pga_full_scale_mv);
+        measure_prov_ads1115_settling_conversions(pga_full_scale_mv, is_current_input);
     for (uint8_t index = 0U; index < settling_conversions; ++index) {
         ESP_RETURN_ON_ERROR(
             ads1115_read_single_shot(
@@ -557,24 +583,34 @@ static uint32_t ads1115_raw_to_voltage_u4(
 static void ads1115_update_range(measure_input_t input, uint32_t adc_voltage_u4)
 {
     uint8_t index = s_input_range_index[(size_t)input];
-    (void)measure_prov_ads1115_range_select(index, adc_voltage_u4, &index);
+    (void)measure_prov_ads1115_range_select(
+        input, s_current_input, index, adc_voltage_u4, &index);
     s_input_range_index[(size_t)input] = index;
 }
 
 esp_err_t measure_prov_ads1115_range_select(
+    measure_input_t input,
+    measure_input_t current_input,
     uint8_t current_index,
     uint32_t adc_voltage_u4,
     uint8_t *next_index)
 {
-    if ((next_index == NULL) || (current_index >= ADS1115_RANGE_COUNT)) {
+    if ((next_index == NULL) || (current_index >= ADS1115_RANGE_COUNT) ||
+        (input < MEASURE_INPUT_ADS1115_AIN0) || (input > MEASURE_INPUT_ADS1115_AIN3) ||
+        (current_input < MEASURE_INPUT_ADS1115_AIN0) ||
+        (current_input > MEASURE_INPUT_ADS1115_AIN3)) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    /* Only the configured current input uses the new policy. */
+    const ads1115_range_config_t *ranges =
+        input == current_input ? ADS_CURRENT_RANGES : ADS_RANGES;
     uint8_t index = current_index;
     if ((index + 1U < ADS1115_RANGE_COUNT) &&
-        (adc_voltage_u4 >= ADS_RANGES[index].hysteresis_top_u4)) {
+        (adc_voltage_u4 >= ranges[index].hysteresis_top_u4)) {
         ++index;
     } else if ((index > 0U) &&
-        (adc_voltage_u4 <= ADS_RANGES[index].hysteresis_bottom_u4)) {
+        (adc_voltage_u4 <= ranges[index].hysteresis_bottom_u4)) {
         --index;
     }
     *next_index = index;
@@ -605,7 +641,7 @@ static void ads1115_acquisition_task(void *arg)
 
                 int16_t raw_code = 0;
                 err = ads1115_read_settled_single_shot(
-                    mux, data_rate_sps, pga_full_scale_mv, &raw_code);
+                    mux, data_rate_sps, pga_full_scale_mv, input == s_current_input, &raw_code);
                 if (err == ESP_OK) {
                     if (xSemaphoreTake(s_cache_lock, portMAX_DELAY) != pdTRUE) {
                         continue;
@@ -777,10 +813,14 @@ esp_err_t measure_prov_ads1115_get_data_rate_sps(uint16_t *sps)
     return ESP_OK;
 }
 
-esp_err_t measure_prov_ads1115_init(void)
+esp_err_t measure_prov_ads1115_init(measure_input_t current_input)
 {
+    if ((current_input < MEASURE_INPUT_ADS1115_AIN0) ||
+        (current_input > MEASURE_INPUT_ADS1115_AIN3)) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (s_ads_initialized) {
-        return ESP_OK;
+        return current_input == s_current_input ? ESP_OK : ESP_ERR_INVALID_STATE;
     }
 
     if (!measure_prov_ads1115_range_config_validate()) {
@@ -830,6 +870,8 @@ esp_err_t measure_prov_ads1115_init(void)
         return err;
     }
 
+    /* Publish the mapping before starting the scan task. */
+    s_current_input = current_input;
     s_ads_initialized = true;
     for (size_t index = 0U; index < ADS_CACHE_ENTRY_COUNT; ++index) {
         s_input_range_index[index] = (uint8_t)(ADS1115_RANGE_COUNT - 1U);

@@ -1,5 +1,24 @@
 # SCPI command modules
 
+Voltage, current, and power averaging each default to 25 samples when no saved
+setting exists. Set or query them independently:
+
+```text
+MEAS:VOLT:AVER:COUN 25
+MEAS:CURR:AVER:COUN 25
+MEAS:POWER:AVER:COUN 25
+MEAS:VOLT:AVER:COUN?
+MEAS:CURR:AVER:COUN?
+MEAS:POWER:AVER:COUN?
+```
+
+These settings persist across restarts; updating firmware does not replace a
+saved count. Voltage's setting applies to both voltage channels. Voltage/current
+calibration capture also uses the corresponding averaging count. Changing counts
+does not modify calibration tables. Scalar queries average retained history, so
+clients must allow the window to refresh after changing a source setpoint.
+See [measurement timing and range policies](../measure_svc/README.MD#data-flow).
+
 `*IDN?` returns `MaxEELabs,PSU-EXT,PE_<MAC>,<firmware-version>`, preserving the four
 comma-separated manufacturer, model, serial-number, and firmware-revision fields.
 The revision comes from `g_firmware_version`, defined once in `main/main.c`.

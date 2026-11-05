@@ -71,8 +71,8 @@ typedef struct {
  */
 esp_err_t measure_svc_set_prov(const measure_provider_t *provider);
 
-/** @brief Initialize the production ADS1115 provider. */
-esp_err_t measure_prov_ads1115_init(void);
+/** @brief Initialize ADS1115 with a current-input mapping fixed until restart. */
+esp_err_t measure_prov_ads1115_init(measure_input_t current_input);
 /** @brief Return the production ADS1115 provider contract. */
 const measure_provider_t *measure_prov_ads1115_get(void);
 /** @brief Persist and activate one supported ADS1115 conversion rate. */

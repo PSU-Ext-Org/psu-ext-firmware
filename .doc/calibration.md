@@ -18,9 +18,11 @@ the hard current cutoff, until successful commit or abort. `ABORt` or reset
 before commit discards staged changes.
 
 `CALibration:STARt` begins an empty replacement table: it does not retain points
-from the active calibration. At each point, the firmware discards two fresh
-conversions and then averages the currently configured voltage or current
-averaging count. The resulting signed raw coordinate retains its fractional
+from the active calibration. At each point, capture discards two fresh published
+samples and then averages the currently configured voltage or current
+averaging count (default 25 when no saved setting exists). These capture discards
+are additional to acquisition's per-input settling conversions below.
+The resulting signed raw coordinate retains its fractional
 ADC-code mean internally; command syntax and point-query formatting are unchanged.
 
 Each table can contain up to 32 points and must contain at least the configured
@@ -33,14 +35,56 @@ both increase strictly; points from different PGAs may be interleaved. Current
 calibration for `CH0` is unsupported.
 
 AIN0, AIN1, and AIN2 autorange independently from their ADC-pin voltage. The
-default ranges are +/-0.256 V, +/-0.512 V, and +/-2.048 V. The first boundary
-switches upward at 0.0572 V and back downward at 0.0500 V (approximately
-1.00 V and 0.875 V through a nominal 17.5:1 divider). The second switches
-upward at 0.416 V and back downward at 0.384 V. The compile-time `ADS_RANGES` array in
-`measure_prov_ads1115.c` accepts up to four ordered ranges selected from
-+/-0.256, +/-0.512, +/-1.024, and +/-2.048 V.
+configured ranges are +/-0.256 V, +/-0.512 V, and +/-2.048 V. The configured
+current input (AIN2 on the production board) uses its own threshold policy:
+
+| Input policy | +/-0.256 to +/-0.512 V / return | +/-0.512 to +/-2.048 V / return |
+| --- | --- | --- |
+| Voltage | 0.0572 / 0.0500 V | 0.416 / 0.384 V |
+| Current | 0.240 / 0.220 V | 0.480 / 0.440 V |
+
+Switch up at or above the upper threshold and down at or below the return
+threshold. These are raw ADC-pin voltages, including the current amplifier's
+zero offset. Voltage's first boundary corresponds to approximately 1.00 V /
+0.875 V through a nominal 17.5:1 divider. Current uses a 10 mOhm shunt with
+INA240A2 gain of 50 V/V (nominal 0.5 V/A above the zero-current offset).
+The compile-time `ADS_RANGES` and `ADS_CURRENT_RANGES` arrays in
+`measure_prov_ads1115.c` must contain matching full-scale values in ascending
+order. Up to four ranges may be selected from +/-0.256, +/-0.512, +/-1.024,
+and +/-2.048 V. Calibration requires usable points in each range being measured.
 
 ## Command Reference
+
+### Recommended acquisition settings
+
+Use **128 SPS ADC rate** and **25-sample averaging** for calibration and
+subsequent verification. Apply these settings before starting a calibration
+transaction; ADC-rate changes are rejected while a transaction is open or
+committing.
+
+```text
+MEAS:ADC:RATE 128
+MEAS:VOLT:AVER:COUN 25
+MEAS:CURR:AVER:COUN 25
+MEAS:POWER:AVER:COUN 25
+```
+
+These settings persist across restarts and do not modify calibration tables.
+Voltage and current captures use their respective averaging counts; power is
+derived and has no separate calibration table. Confirm the active settings with:
+
+```text
+MEAS:ADC:RATE?
+MEAS:VOLT:AVER:COUN?
+MEAS:CURR:AVER:COUN?
+MEAS:POWER:AVER:COUN?
+```
+
+At these settings, allow at least five seconds after each source step during
+verification, and longer if the source or load has not settled. During calibration,
+also wait for each point-capture command to finish before changing the source.
+
+### Command syntax
 
 Accepted keyword forms are case-insensitive. Calibration commands accept either
 the shown long form or the implemented short segments:
@@ -110,10 +154,12 @@ codes and individual lower-range code changes remain visible. Physical
 reference and measurement values continue to use the service's unsigned
 four-decimal u4 representation.
 
-The acquisition scan discards three conversions after selecting an input at
-+/-0.256 V and one conversion at the other configured ranges. Calibration
-capture therefore receives only a later settled conversion, which is important
-with the high-impedance voltage dividers.
+The acquisition scan discards three conversions for voltage at +/-0.256 V
+and one for voltage at the other configured ranges, then accepts one conversion.
+Current discards one conversion and accepts the next at every range, including
+its newly used +/-0.256 V range. This preserves current's previous acquisition
+cost while retaining the extra settling for high-impedance voltage dividers.
+Low-range current settling still needs hardware validation.
 
 The service publishes each cached ADC generation once. Consequently, changing
 the ADS1115 data rate changes how long an N-sample average spans, but does not

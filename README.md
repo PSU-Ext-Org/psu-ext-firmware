@@ -78,6 +78,17 @@ The interrupt watchdog retains its existing 300 ms timeout.
 The separate `test/unit/sdkconfig.defaults` configures the Unity runner and its
 USB Serial/JTAG console. Its generated configuration is also ignored.
 
+## Measurement averaging
+
+Voltage, current, and power averaging default to 25 samples. Existing saved
+counts take precedence after firmware updates. The configured current input
+has separate PGA switching thresholds and uses one discarded plus one accepted
+conversion at every range; voltage thresholds and settling counts are preserved.
+See the [measurement-service documentation](components/measure_svc/README.MD#data-flow)
+for thresholds and scan timing, and the [SCPI documentation](components/scpi_handler/README.md)
+for averaging commands. Source-step verification must allow enough time to replace
+the averaging window; scalar queries do not collect a new window on demand.
+
 ## Relative voltage, current, and power readings
 
 `MEAS:VOLT:REL <channel>,<volts>` sets a REL offset for `CH0` or `CH1`.

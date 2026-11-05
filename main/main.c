@@ -43,7 +43,7 @@
 #include "wifi_manager.h"
 
 /* Update this constant when preparing a firmware release. */
-const char g_firmware_version[] = "1.3.1";
+const char g_firmware_version[] = "1.3.1-R1";
 
 static const char *TAG = "main";
 
