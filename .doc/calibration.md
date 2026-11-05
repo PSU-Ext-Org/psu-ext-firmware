@@ -55,6 +55,37 @@ and +/-2.048 V. Calibration requires usable points in each range being measured.
 
 ## Command Reference
 
+### Recommended acquisition settings
+
+Use **128 SPS ADC rate** and **25-sample averaging** for calibration and
+subsequent verification. Apply these settings before starting a calibration
+transaction; ADC-rate changes are rejected while a transaction is open or
+committing.
+
+```text
+MEAS:ADC:RATE 128
+MEAS:VOLT:AVER:COUN 25
+MEAS:CURR:AVER:COUN 25
+MEAS:POWER:AVER:COUN 25
+```
+
+These settings persist across restarts and do not modify calibration tables.
+Voltage and current captures use their respective averaging counts; power is
+derived and has no separate calibration table. Confirm the active settings with:
+
+```text
+MEAS:ADC:RATE?
+MEAS:VOLT:AVER:COUN?
+MEAS:CURR:AVER:COUN?
+MEAS:POWER:AVER:COUN?
+```
+
+At these settings, allow at least five seconds after each source step during
+verification, and longer if the source or load has not settled. During calibration,
+also wait for each point-capture command to finish before changing the source.
+
+### Command syntax
+
 Accepted keyword forms are case-insensitive. Calibration commands accept either
 the shown long form or the implemented short segments:
 
