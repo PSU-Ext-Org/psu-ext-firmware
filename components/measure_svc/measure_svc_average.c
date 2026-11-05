@@ -57,6 +57,7 @@ static uint32_t clamp_count(uint32_t count)
     return count > MEASURE_SVC_MAX_AVERAGE_COUNT ? MEASURE_SVC_MAX_AVERAGE_COUNT : count;
 }
 
+/* Apply defaults only when no saved setting exists; never overwrite NVS here. */
 static esp_err_t load_count(const char *key, uint32_t *count)
 {
     nvs_handle_t handle;

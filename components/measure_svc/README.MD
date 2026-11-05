@@ -39,15 +39,48 @@ modules. Application components must not depend on them.
 
 ## Data flow
 
+Each input remembers its own PGA range. The configured current input uses
+separate thresholds for the 10 mOhm shunt and INA240A2 (50 V/V). Thresholds
+are raw ADC-pin voltages, including the zero-current offset, not calibrated
+voltage or current readings. Voltage thresholds remain unchanged:
+
+| Input | +/-256 to +/-512 mV / return | +/-512 to +/-2048 mV / return |
+| --- | --- | --- |
+| Voltage | 57.2 / 50 mV | 416 / 384 mV |
+| Current | 240 / 220 mV | 480 / 440 mV |
+
+Switch up at or above the upper threshold, and down at or below the return
+threshold. Within each hysteresis window, retain the current range.
+Current always uses
+one discarded conversion plus one accepted conversion, including at +/-256 mV,
+preserving its previous acquisition cost. Calibration storage is unchanged.
+Current measurements need calibration points in each used PGA; low-range
+current settling still needs validation on hardware.
+
+Voltage, current, and power averaging default to 25 samples (configurable 1--100).
+Voltage's count applies to both CH0 and CH1, which retain separate histories.
+Calibration capture uses the configured count for the target quantity as well.
+Saved averaging settings take precedence; firmware updates do not replace them.
+Use `MEAS:VOLT:AVER:COUN 25`, `MEAS:CURR:AVER:COUN 25`, and
+`MEAS:POWER:AVER:COUN 25` to update a device that still has 50 saved.
+
+Scalar queries average the newest retained samples; they do not wait for a
+fresh window after a source step. At 128 SPS and a 100 Hz FreeRTOS tick, a
+scan with both voltage inputs at +/-256 mV takes approximately 100 ms:
+four conversions per voltage input and two for current. Replacing a 25-sample
+voltage/current window therefore takes roughly 2.5 seconds, leaving margin
+for a five-second verification interval. These are timing estimates, not
+deadlines; slower ADC rates or scheduling delays require longer waits.
+
 The ADS1115 provider refreshes a three-input cache in a background single-shot
 scan. The sampler polls that cache at its configured rate and publishes each
 ADC conversion once:
 
 Because every scan step changes the MUX and the divider has significant source
 impedance, acquisition discards conversions after selecting each input/PGA and
-caches the following conversion. It discards three conversions at +/-0.256 V
-and one at the other configured ranges. This prevents the preceding channel
-from biasing the published sample while the ADS1115 switched-capacitor input settles.
+caches the following conversion. Voltage discards three conversions at +/-0.256 V
+and one at the other configured ranges. Current discards one at every range.
+The extra voltage discards allow the high-impedance divider inputs to settle.
 
 ```text
 ADS1115 scan -> cache -> sampler -> active PGA calibration -> sample event
@@ -69,8 +102,9 @@ channel but suppresses repeated cache generations. History, averaging,
 calibration, and protection therefore consume each physical ADC conversion
 once rather than weighting cached duplicates according to their dwell time.
 
-The ADS conversion cache, averaging scratch window, SCPI history scratch
-buffers, and all measurement-history rings are allocated strictly in PSRAM.
+The ADS conversion cache, SCPI history scratch buffers, and measurement-history
+rings are allocated strictly in PSRAM. Averaging sums directly from the history
+under its lock, without a separate averaging scratch window.
 
 ## Protection mapping
 
@@ -185,11 +219,11 @@ legacy fixed-range records.
 
 Unit tests live in `test/` and cover table math, record integrity, NVS loading,
 transaction behavior, concurrency, and the native-code capture state machine.
-The Unity device image is successful when the menu command `*` reports:
-
-```text
-18 Tests 0 Failures 0 Ignored
-```
+The `[range]` tests cover voltage thresholds, current thresholds and input
+mapping, raw conversion scaling, and per-input settling counts. These tests
+do not initialize the ADC or access NVS. Test totals depend on the selected
+components. See [the unit-runner instructions](../../test/unit/README.md) for
+test selection and calibration-storage isolation.
 
 Build the production firmware from the repository root in the configured
 ESP-IDF PowerShell environment with `idf.py build`.

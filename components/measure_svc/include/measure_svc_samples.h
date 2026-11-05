@@ -33,7 +33,7 @@ extern "C" {
 
 #define MEASURE_SVC_MIN_AVERAGE_COUNT 1U /**< Smallest read-average window. */
 #define MEASURE_SVC_MAX_AVERAGE_COUNT 100U /**< Largest read-average window. */
-#define MEASURE_SVC_DEFAULT_AVERAGE_COUNT 50U /**< Initial average window. */
+#define MEASURE_SVC_DEFAULT_AVERAGE_COUNT 25U /**< Initial voltage/current/power average window. */
 #define MEASURE_SVC_MAX_SAMPLE_CAPACITY 1000U /**< Samples retained per ring. */
 #define MEASURE_SVC_MAX_SAMPLE_LISTENERS 8U /**< Listeners allowed per kind. */
 

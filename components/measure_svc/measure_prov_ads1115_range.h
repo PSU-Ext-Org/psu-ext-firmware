@@ -20,13 +20,16 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "measure_types.h"
 
 /** @brief Validate the compile-time ADS1115 autorange policy. */
 bool measure_prov_ads1115_range_config_validate(void);
 
 /** @brief Select at most one adjacent range from one ADC-side voltage sample. */
 esp_err_t measure_prov_ads1115_range_select(
+    measure_input_t input, measure_input_t current_input,
     uint8_t current_index, uint32_t adc_voltage_u4, uint8_t *next_index);
 
-/** @brief Return the conversions discarded before publishing at one PGA. */
-uint8_t measure_prov_ads1115_settling_conversions(uint16_t pga_full_scale_mv);
+/** @brief Return discards: one for current, with extra low-range voltage settling. */
+uint8_t measure_prov_ads1115_settling_conversions(
+    uint16_t pga_full_scale_mv, bool is_current_input);

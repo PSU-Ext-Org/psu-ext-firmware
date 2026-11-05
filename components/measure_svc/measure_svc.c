@@ -169,7 +169,8 @@ esp_err_t measure_svc_init_with_config(const measure_svc_config_t *config)
     ESP_RETURN_ON_ERROR(measure_svc_calibration_capture_init(), TAG, "initializing capture failed");
     ESP_RETURN_ON_ERROR(measure_svc_calibration_init(), TAG, "loading calibration failed");
     ESP_RETURN_ON_ERROR(measure_svc_average_init(), TAG, "loading averaging failed");
-    ESP_RETURN_ON_ERROR(measure_prov_ads1115_init(), TAG, "initializing ADS1115 provider failed");
+    ESP_RETURN_ON_ERROR(measure_prov_ads1115_init(s_config.output_current_input),
+        TAG, "initializing ADS1115 provider failed");
     ESP_RETURN_ON_ERROR(measure_svc_set_prov(measure_prov_ads1115_get()), TAG, "setting provider failed");
     ESP_RETURN_ON_ERROR(measure_svc_power_init(), TAG, "initializing power derivation failed");
     ESP_RETURN_ON_ERROR(measure_svc_history_register_listeners(), TAG, "registering history failed");

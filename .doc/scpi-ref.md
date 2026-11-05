@@ -55,15 +55,30 @@ Scalar readings return decimal values with four fractional digits.
 | `MEAS:POWER:AVER:COUN <count>` | none | Sets persisted scalar power averaging count. Values are clamped to `1..100`. |
 | `MEAS:POWER:AVER:COUN?` | `<count>` | Returns power averaging count. |
 
-The default averaging count is `50`. A count of `1` returns the newest stored
+The default averaging count is `25` for voltage, current, and power. Saved
+counts take precedence after firmware updates. Voltage's count applies to both
+CH0 and CH1; voltage/current calibration capture uses the corresponding count
+as well. Changing an averaging count does not modify calibration tables.
+A count of `1` returns the newest stored
 calibrated sample. If fewer than the configured count are available, the
 firmware averages all currently available samples.
 
 The ADC rate defaults to `128` SPS and applies to all three ADS1115 inputs.
 Acquisition remains single-shot and cycles through the inputs. Measurement
-events continue at 100 samples/s per logical channel, so rates slower than the
-publication rate produce repeated cached values. The rate cannot be changed
+polling runs at 100 Hz per logical channel, but each cached ADC generation is
+published only once. Fresh sample rates depend on the shared scan, settling
+conversions, and task timing; they are not 128 or 100 samples/s per channel.
+The rate cannot be changed
 while a calibration transaction is open or committing.
+
+Scalar queries average retained history; they do not wait for a fresh window.
+After changing a source setpoint, allow time to replace that window. At 128 SPS
+with a 100 Hz FreeRTOS tick and both voltage inputs in +/-0.256 V, the current
+scan policy takes roughly 100 ms per scan. A 25-sample voltage/current window
+then spans about 2.5 seconds; 50 samples span about five seconds with little
+margin for a five-second verification interval. Allow longer at slower ADC
+rates or under scheduling delays. See [calibration.md](calibration.md) for
+per-input PGA thresholds and settling counts.
 
 ## Measurement History
 
